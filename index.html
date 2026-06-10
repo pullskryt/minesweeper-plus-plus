@@ -1,0 +1,1204 @@
+<!DOCTYPE html><html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Minesweeper: Overload Edition</title>
+  <style>
+    :root {
+      --bg: #c0c0c0;
+      --panel: #d6d6d6;
+      --panel-light: #fefefe;
+      --ink: #111;
+      --cell: 18px;
+      --zoom: 1;
+      --shadow-in: inset 1px 1px 0 rgba(255,255,255,.92), inset -1px -1px 0 rgba(0,0,0,.22);
+      --shadow-out: 0 10px 26px rgba(0,0,0,.18);
+      --blue: #0000ff;
+      --green: #008000;
+      --red: #ff0000;
+      --purple: #800080;
+      --teal: #008080;
+      --orange: #ff8000;
+      --yellow: #d6a000;
+      --cyan: #00a0ff;
+      --magenta: #cc00cc;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(180deg, #d7d7d7, #b8b8b8 58%, #a9a9a9);
+      font-family: Tahoma, Verdana, Arial, sans-serif;
+      color: var(--ink);
+    }
+    button, select, input { font: inherit; }
+    .app {
+      height: 100dvh;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 8px;
+      padding: 8px;
+      padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    }
+    .retro {
+      background: linear-gradient(180deg, var(--panel-light), var(--panel));
+      border: 1px solid rgba(0,0,0,.22);
+      box-shadow: var(--shadow-in), var(--shadow-out);
+      border-radius: 10px;
+    }
+    .titlebar {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      opacity: .84;
+      padding: 0 2px;
+    }
+    .titlebar strong { font-size: 13px; }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+    .lcd {
+      height: 48px;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #111, #222);
+      border: 1px solid rgba(0,0,0,.4);
+      color: #ff2a2a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .08em;
+      text-shadow: 0 0 8px rgba(255,50,50,.3);
+    }
+    .lcd .wrap {
+      display: grid;
+      place-items: center;
+      gap: 1px;
+      line-height: 1;
+    }
+    .lcd .label {
+      color: rgba(255,130,130,.72);
+      font-size: 9px;
+      letter-spacing: .15em;
+    }
+    .lcd .value {
+      font-size: 24px;
+      min-width: 72px;
+      text-align: center;
+      font-weight: 900;
+    }
+    .face-wrap { display: grid; place-items: center; }
+    .face-btn {
+      width: 52px;
+      height: 52px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,.2);
+      background: linear-gradient(180deg, #fff, #d7d7d7);
+      box-shadow: var(--shadow-in), var(--shadow-out);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      color: #333;
+      padding: 0;
+    }
+    .face-btn svg { width: 32px; height: 32px; }
+    .face-btn:active { transform: translateY(1px); }
+    .face-btn.win { color: #008800; }
+    .face-btn.lose { color: #cc0000; }
+    .board-wrap {
+      position: relative;
+      overflow: auto;
+      padding: 8px;
+      border-radius: 12px;
+      background: rgba(0,0,0,.08);
+      border: 1px solid rgba(0,0,0,.14);
+      box-shadow: inset 0 1px 10px rgba(0,0,0,.08);
+      -webkit-overflow-scrolling: touch;
+    }
+    .board {
+      width: max-content;
+      margin: 0 auto;
+      display: grid;
+      gap: 1px;
+      background: rgba(0,0,0,.38);
+      padding: 1px;
+      border-radius: 7px;
+      touch-action: manipulation;
+      transform: scale(var(--zoom));
+      transform-origin: top center;
+    }
+    .cell {
+      width: var(--cell);
+      height: var(--cell);
+      display: grid;
+      place-items: center;
+      position: relative;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      background: linear-gradient(180deg, #fafafa, #d4d4d4);
+      box-shadow: inset 1px 1px 0 rgba(255,255,255,.92), inset -1px -1px 0 rgba(0,0,0,.2);
+      color: #111;
+      font-weight: 900;
+      font-size: calc(var(--cell) * .58);
+      line-height: 1;
+      image-rendering: pixelated;
+    }
+    .cell.revealed {
+      background: linear-gradient(180deg, #ededed, #bdbdbd);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    }
+    .cell.flagged::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, transparent 52%, #80542d 53% 56%, transparent 57%),
+        linear-gradient(135deg, transparent 42%, #d11919 43% 65%, transparent 66%);
+      clip-path: polygon(30% 15%, 71% 15%, 62% 34%, 71% 48%, 30% 48%, 30% 87%, 22% 87%, 22% 15%);
+    }
+    .cell.frozen {
+      box-shadow: inset 0 0 0 2px rgba(0,160,255,.38), inset 1px 1px 0 rgba(255,255,255,.92), inset -1px -1px 0 rgba(0,0,0,.2);
+    }
+    .cell.frozen::after {
+      content: '❄';
+      position: absolute;
+      right: 1px;
+      top: -1px;
+      font-size: 9px;
+      color: #0a8cff;
+      text-shadow: 0 0 1px rgba(255,255,255,.5);
+    }
+    .cell.timer-badge::after {
+      content: attr(data-timer);
+      position: absolute;
+      right: 1px;
+      top: 1px;
+      min-width: 12px;
+      height: 12px;
+      padding: 0 2px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #3a3a3a, #1a1a1a);
+      border: 1px solid rgba(255,255,255,.08);
+      color: #ff5151;
+      font-size: 8px;
+      line-height: 11px;
+      text-align: center;
+      font-weight: 900;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.12);
+    }
+    .cell.bad-pickup::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      border: 2px solid rgba(0,110,255,.35);
+    }
+    .num-1 { color: var(--blue); }
+    .num-2 { color: var(--green); }
+    .num-3 { color: var(--red); }
+    .num-4 { color: #000080; }
+    .num-5 { color: #800000; }
+    .num-6 { color: #008080; }
+    .num-7 { color: #111111; }
+    .num-8 { color: #666666; }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+    }
+    .toolset { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .tool-btn, .mini-btn, .select-btn, .zoom-wrap input {
+      border: 1px solid rgba(0,0,0,.22);
+      border-radius: 10px;
+      background: linear-gradient(180deg, #fff, #d6d6d6);
+      box-shadow: var(--shadow-in);
+      color: var(--ink);
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tool-btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; min-height: 40px; font-weight: 800; }
+    .tool-btn.active { background: linear-gradient(180deg, #eaf2ff, #c0d7ff); border-color: #75a6ea; }
+    .tool-btn .icon, .mini-btn .icon { display: inline-grid; place-items: center; width: 18px; height: 18px; }
+    .tool-btn svg, .mini-btn svg { width: 18px; height: 18px; display: block; shape-rendering: crispEdges; }
+    .select-btn { min-height: 40px; padding: 0 12px; font-weight: 800; }
+    .tool-info { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; opacity: .85; }
+    .tool-info span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.34);
+      border: 1px solid rgba(0,0,0,.08);
+    }
+    .zoom-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 8px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.34);
+      border: 1px solid rgba(0,0,0,.08);
+      min-height: 40px;
+    }
+    .zoom-wrap label { font-size: 12px; font-weight: 800; white-space: nowrap; }
+    .zoom-wrap input {
+      width: min(30vw, 180px);
+      accent-color: #5f7fd8;
+      box-shadow: none;
+      background: transparent;
+      border: 0;
+    }.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0 2px;
+  font-size: 12px;
+  opacity: .8;
+}
+.legend { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+  border: 1px solid rgba(0,0,0,.18);
+}
+.board-hint {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(92vw, 420px);
+  text-align: center;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.92);
+  border: 1px solid rgba(0,0,0,.16);
+  box-shadow: 0 16px 34px rgba(0,0,0,.18);
+  opacity: 0;
+  transition: opacity .15s ease;
+  pointer-events: none;
+  z-index: 3;
+}
+.board-hint.show { opacity: 1; }
+.modals {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0,0,0,.56);
+  z-index: 50;
+}
+.modals.show { display: flex; }
+.modal {
+  width: min(100%, 820px);
+  max-height: min(90dvh, 920px);
+  overflow: auto;
+  background: linear-gradient(180deg, #fff, #e4e4e4);
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.2);
+  box-shadow: 0 30px 80px rgba(0,0,0,.35);
+}
+.modal header {
+  padding: 16px 18px 10px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.modal header h2 { margin: 0; font-size: 18px; }
+.modal .body { padding: 16px 18px 18px; }
+.modal p { margin: 0 0 12px; line-height: 1.5; }
+.actions { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; margin-top: 14px; }
+.actions .mini-btn { padding: 10px 14px; min-width: 110px; font-weight: 800; }
+.steps { display: grid; gap: 10px; margin: 12px 0; }
+.step-row { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; }
+.dot {
+  width: 18px; height: 18px; margin-top: 4px; border-radius: 50%;
+  border: 2px solid rgba(0,0,0,.18);
+  background: #fff;
+}
+.dot.done { background: #2c86ff; border-color: #2c86ff; }
+.difficulty-list, .wiki-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.difficulty-list .mini-btn, .wiki-tabs .mini-btn { padding: 9px 12px; font-weight: 800; }
+.mini-btn.active { background: linear-gradient(180deg, #eaf2ff, #c0d7ff); border-color: #75a6ea; }
+.grid-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.card {
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff, #ededed);
+  border: 1px solid rgba(0,0,0,.14);
+  box-shadow: var(--shadow-in);
+}
+.card h3 { margin: 0 0 8px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.card ul { margin: 0; padding-left: 18px; line-height: 1.45; }
+.wiki-body { display: grid; gap: 10px; }
+.mini-list { display: grid; gap: 8px; }
+.mini-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.1);
+  background: rgba(255,255,255,.62);
+}
+.mini-item strong { display: inline-flex; align-items: center; gap: 8px; }
+.mini-item svg { width: 16px; height: 16px; }
+.kicker, .small-note { font-size: 12px; opacity: .76; }
+.good { color: #008000; font-weight: 800; }
+.bad { color: #cc0000; font-weight: 800; }
+@media (max-width: 760px) {
+  :root { --cell: 16px; }
+  .hud { grid-template-columns: 1fr auto 1fr; }
+  .lcd .value { min-width: 58px; font-size: 21px; }
+  .toolset, .tool-info { width: 100%; }
+  .toolset { justify-content: space-between; }
+  .tool-btn { flex: 1 1 auto; justify-content: center; }
+  .select-btn { width: 100%; }
+  .grid-cards { grid-template-columns: 1fr; }
+  .footer { flex-direction: column; align-items: flex-start; }
+  .zoom-wrap { width: 100%; justify-content: space-between; }
+  .zoom-wrap input { width: 45%; }
+}
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="titlebar">
+      <div><strong>Minesweeper: Overload Edition</strong> — ретро-сапёр с лишним хаосом</div>
+      <div id="firstSeenText"></div>
+    </div><div class="hud retro">
+  <div class="lcd"><div class="wrap"><div class="label">MINES</div><div class="value" id="minesLeft">000</div></div></div>
+  <div class="face-wrap">
+    <button class="face-btn" id="resetBtn" aria-label="Новая игра" title="Новая игра">
+      <svg viewBox="0 0 24 24" id="faceIcon"><path fill="currentColor" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm-3 6.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm6 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm-4 4.4h2.2c1.8 0 3.2.7 4.3 2l1.5-1.2c-1.4-1.8-3.6-2.8-5.8-2.8s-4.4 1-5.8 2.8l1.5 1.2c1.1-1.3 2.5-2 4.1-2Z"/></svg>
+    </button>
+  </div>
+  <div class="lcd"><div class="wrap"><div class="label">TIME</div><div class="value" id="timeLeft">000</div></div></div>
+</div>
+
+<div class="board-wrap retro" id="boardWrap">
+  <div class="board" id="board"></div>
+  <div class="board-hint" id="hint"></div>
+</div>
+
+<div class="toolbar retro">
+  <div class="toolset">
+    <button class="tool-btn active" data-tool="open" id="toolOpen"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#0000ff" d="M2 8h7V5l5 3-5 3V8H2Z"/></svg></span>Открыть</button>
+    <button class="tool-btn" data-tool="flag" id="toolFlag"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#000000" d="M3 1h1v14H3z"/><path fill="#ff0000" d="M4 2h8l-2 2 2 2H4z"/></svg></span>Флаг</button>
+    <button class="tool-btn" data-tool="defer" id="toolDefer"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#2d6bff" d="M8 1c2.6 0 4.8 2 4.8 4.5 0 2.1-1.4 3.8-3.4 4.4v2l1.3 1.3-1 1L8 12.7l-1.7 1.5-1-1 1.3-1.3v-2C4.6 9.3 3.2 7.6 3.2 5.5 3.2 3 5.4 1 8 1Z"/><rect x="7" y="4" width="2" height="2" fill="#ffd500"/></svg></span>Дефер</button>
+    <button class="tool-btn" data-tool="drone" id="toolDrone"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#a300d6" d="M8 3c1.7 0 3 1.3 3 3v1h2v2h-2v2h-2V9H7v2H5V9H3V7h2V6c0-1.7 1.3-3 3-3Z"/><circle cx="8" cy="7" r="1" fill="#ffffff"/></svg></span>Дрон</button>
+    <button class="tool-btn" data-tool="bomb" id="toolBomb"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#222222" d="M9 1h1v2h-1z"/><path fill="#ff5500" d="M9 3c2 0 3.5 1.5 3.5 3.5S11 10 9 10 5.5 8.5 5.5 6.5 7 3 9 3Z"/><path fill="#000000" d="M12 2l1 1-1 1-1-1z"/></svg></span>Бомба</button>
+    <button class="tool-btn" data-tool="wiki" id="toolWiki"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#0b5cff" d="M2 1h6c1 0 2 .8 2 2v11H4c-1.1 0-2 .9-2 2V1Z"/><path fill="#ffffff" d="M4 3h4v1H4zm0 3h4v1H4zm0 3h3v1H4z"/></svg></span>Книжечка</button>
+  </div>
+  <div class="tool-info">
+    <span><strong>Ходы:</strong> <b id="moves">0</b></span>
+    <span><strong>Статус:</strong> <b id="statusText">готов</b></span>
+    <div class="zoom-wrap">
+      <label for="zoomSlider">Зум</label>
+      <input id="zoomSlider" type="range" min="80" max="140" value="100" step="5" />
+    </div>
+    <select class="select-btn" id="difficultySelect" aria-label="Сложность">
+      <option value="easy">Легко</option>
+      <option value="normal" selected>Среднее</option>
+      <option value="hard">Сложно</option>
+      <option value="veryhard">Очень сложно</option>
+      <option value="impossible">Невозможно</option>
+    </select>
+  </div>
+</div>
+
+<div class="footer">
+  <div class="legend">
+    <span><i style="background:#ececec"></i> открытая клетка</span>
+    <span><i style="background:#c0c0c0"></i> закрытая клетка</span>
+    <span><i style="background:#ffd9b5"></i> таймер включится только после цифры рядом</span>
+  </div>
+  <div>Первый клик безопасный. Таймерные мины молчат, пока рядом не откроют число.</div>
+</div>
+
+  </div>  <div class="modals" id="tutorialLayer">
+    <div class="modal" id="tutorialModal">
+      <header>
+        <h2>Обучение</h2>
+        <div class="small-note" id="tutorialMeta"></div>
+      </header>
+      <div class="body">
+        <p id="tutorialText"></p>
+        <div class="steps" id="tutorialSteps"></div>
+        <div class="difficulty-list" id="tutorialDiffs"></div>
+        <div class="actions">
+          <button class="mini-btn" id="tutorialBack">Назад</button>
+          <button class="mini-btn" id="tutorialNext">Дальше</button>
+        </div>
+      </div>
+    </div>
+  </div>  <div class="modals" id="wikiLayer">
+    <div class="modal" id="wikiModal">
+      <header>
+        <h2>Книжечка</h2>
+        <div class="small-note">подробно про всё, что шевелится и взрывается</div>
+      </header>
+      <div class="body">
+        <div class="wiki-tabs" id="wikiTabs"></div>
+        <div class="wiki-body" id="wikiBody"></div>
+        <div class="actions"><button class="mini-btn" id="wikiClose">Закрыть</button></div>
+      </div>
+    </div>
+  </div>  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <symbol id="i-mine" viewBox="0 0 16 16"><path fill="#202020" d="M8 1l1.4 3L13 5l-3.6 1.7L8 10 6.6 6.7 3 5l3.6-1L8 1Z"/><path fill="#ff0000" d="M8 4.5 8.7 6l1.5.7-1.5.7L8 9 7.3 7.4 5.8 6.7 7.3 6z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 16 16"><path fill="#ff9900" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm1 3H7v4.8l3.2 1.9.8-1.3L9 8.6V4Z"/></symbol>
+    <symbol id="i-fire" viewBox="0 0 16 16"><path fill="#ff6a00" d="M9 1c.8 1.4.8 2.8.3 4 1.1-.2 2-.8 2.6-2 .9 1.5 1.5 2.8 1.5 4.5A4.8 4.8 0 0 1 8 12.3C5.4 12.3 3.3 10.4 3.3 8c0-1.7.7-3.2 2.2-4.8.1 1.4.7 2.4 1.7 3 .2-2 1.1-3.6 2.8-5.2Z"/><path fill="#ff2b2b" d="M8 5.2c.7.7 1 1.7.9 2.9-.1.8-.6 1.5-1.3 2-.5-.4-.8-1-.9-1.6-.1-1.1.4-2.2 1.3-3.3Z"/></symbol>
+    <symbol id="i-ice" viewBox="0 0 16 16"><path fill="#67c8ff" d="M8 1 6.6 4.4 3 3.5 4.6 6.8 1 8l3.6 1.2-1.6 3.3 3.6-.9L8 15l1.4-3.4 3.6.9-1.6-3.3L15 8l-3.6-1.2L13 3.5l-3.6.9L8 1Z"/><path fill="#fff" opacity=".9" d="M8 3.6 8.7 5.5l1.9.7-1.9.7L8 8.8 7.3 6.9l-1.9-.7 1.9-.7L8 3.6Z"/></symbol>
+    <symbol id="i-electric" viewBox="0 0 16 16"><path fill="#ffd500" d="M10 1 5 8h3l-.5 7L12 8H9.1L10 1Z"/><path fill="#2d66ff" d="M8.2 3.2 7 7h2l-.5 2.6L10.4 6H8.3l-.1-2.8Z"/></symbol>
+    <symbol id="i-radiation" viewBox="0 0 16 16"><path fill="#3cab1e" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 2.4A4.6 4.6 0 0 0 4.1 10l2.1-1.2a2.2 2.2 0 0 1 3.8 0l2.1 1.2A4.6 4.6 0 0 0 8 3.4Z"/><circle cx="8" cy="8" r="1" fill="#202020"/></symbol>
+    <symbol id="i-teleport" viewBox="0 0 16 16"><path fill="#a64cff" d="M8 1 5 4h2v3H4L1 10l3 3h3V10h2v2l3-3-3-3V1Z"/><path fill="#ff9a3d" d="M8 3 9.7 4.8V7H8V3Z"/></symbol>
+    <symbol id="i-magnet" viewBox="0 0 16 16"><path fill="#00a6a6" d="M4 1h3v5H4V1Zm5 0h3v5H9V1ZM4 6h3v2c0 1.7 1.3 3 3 3s3-1.3 3-3V6h3v2a6 6 0 0 1-6 6 6 6 0 0 1-6-6V6Z"/><path fill="#ff5555" d="M7 2h2v2H7V2Zm5 0h2v2h-2V2Z"/></symbol>
+    <symbol id="i-defer" viewBox="0 0 16 16"><path fill="#2d6bff" d="M8 1a7 7 0 0 1 0 14A7 7 0 0 1 8 1Zm0 2A5 5 0 1 0 8 13a5 5 0 0 0 0-10Z"/><rect x="7" y="4" width="2" height="2" fill="#ffd500"/><path fill="#2d6bff" d="M8 4v2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 16 16"><path fill="#1b8f3a" d="M8 1l5 2.2V7c0 3.6-2.2 6-5 7-2.8-1-5-3.4-5-7V3.2L8 1Z"/><path fill="#fff" opacity=".9" d="M8 3 11.5 4.5V7c0 2.6-1.5 4.4-3.5 5.2C6 11.4 4.5 9.6 4.5 7V4.5L8 3Z"/></symbol>
+    <symbol id="i-drone" viewBox="0 0 16 16"><path fill="#a300d6" d="M8 3c1.7 0 3 1.3 3 3v1h2v2h-2v2H9V9H7v2H5V9H3V7h2V6c0-1.7 1.3-3 3-3Z"/><circle cx="8" cy="7" r="1" fill="#fff"/></symbol>
+    <symbol id="i-bomb" viewBox="0 0 16 16"><path fill="#222" d="M9 1h1v2H9z"/><path fill="#ff5500" d="M9 3c2 0 3.5 1.5 3.5 3.5S11 10 9 10 5.5 8.5 5.5 6.5 7 3 9 3Z"/><path fill="#000" d="M11 2.2 12.2 3.4 11 4.6 9.8 3.4 11 2.2Z"/></symbol>
+    <symbol id="i-wiki" viewBox="0 0 16 16"><path fill="#0b5cff" d="M2 1h6c1.1 0 2 .9 2 2v11H4c-1.1 0-2 .9-2 2V1Z"/><path fill="#fff" d="M4 3h4v1H4zm0 3h4v1H4zm0 3h3v1H4z"/></symbol>
+  </svg>  <script>
+    (() => {
+      const board = document.getElementById('board');
+      const boardWrap = document.getElementById('boardWrap');
+      const hint = document.getElementById('hint');
+      const minesLeftEl = document.getElementById('minesLeft');
+      const timeLeftEl = document.getElementById('timeLeft');
+      const movesEl = document.getElementById('moves');
+      const statusText = document.getElementById('statusText');
+      const resetBtn = document.getElementById('resetBtn');
+      const faceIcon = document.getElementById('faceIcon');
+      const toolButtons = [...document.querySelectorAll('[data-tool]')];
+      const difficultySelect = document.getElementById('difficultySelect');
+      const zoomSlider = document.getElementById('zoomSlider');
+      const tutorialLayer = document.getElementById('tutorialLayer');
+      const tutorialMeta = document.getElementById('tutorialMeta');
+      const tutorialText = document.getElementById('tutorialText');
+      const tutorialSteps = document.getElementById('tutorialSteps');
+      const tutorialDiffs = document.getElementById('tutorialDiffs');
+      const tutorialBack = document.getElementById('tutorialBack');
+      const tutorialNext = document.getElementById('tutorialNext');
+      const wikiLayer = document.getElementById('wikiLayer');
+      const wikiTabs = document.getElementById('wikiTabs');
+      const wikiBody = document.getElementById('wikiBody');
+      const wikiClose = document.getElementById('wikiClose');
+      const firstSeenText = document.getElementById('firstSeenText');
+
+      const LS_FIRST = 'overload_first_seen';
+      const LS_TUTORIAL = 'overload_tutorial_seen';
+      const LS_ZOOM = 'overload_zoom';
+
+      const DIFFS = {
+        easy: { label: 'Легко', w: 20, h: 20, mines: 0.11, eventEvery: 8, eventChance: 0.11 },
+        normal: { label: 'Среднее', w: 24, h: 24, mines: 0.13, eventEvery: 7, eventChance: 0.15 },
+        hard: { label: 'Сложно', w: 30, h: 30, mines: 0.145, eventEvery: 6, eventChance: 0.2 },
+        veryhard: { label: 'Очень сложно', w: 36, h: 36, mines: 0.16, eventEvery: 5, eventChance: 0.24 },
+        impossible: { label: 'Невозможно', w: 42, h: 42, mines: 0.18, eventEvery: 4, eventChance: 0.28 },
+      };
+
+      const state = {
+        diff: 'normal',
+        w: 24,
+        h: 24,
+        board: [],
+        firstClick: false,
+        over: false,
+        won: false,
+        moves: 0,
+        startTs: 0,
+        time: 0,
+        timer: null,
+        selectedTool: 'open',
+        mineTotal: 0,
+        inventory: { defer: 0, shield: 1, drone: 0, bomb: 0 },
+        tutorialStep: 0,
+        wikiTab: 'modes',
+        firstSeen: localStorage.getItem(LS_FIRST) || '',
+        zoom: Number(localStorage.getItem(LS_ZOOM) || '100') / 100,
+      };
+
+      const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+      const rand = n => Math.floor(Math.random() * n);
+      const key = (x, y) => `${x},${y}`;
+      const inBounds = (x, y) => x >= 0 && y >= 0 && x < state.w && y < state.h;
+      const get = (x, y) => state.board[y]?.[x];
+
+      function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = rand(i + 1); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+      function neighbors(x, y, dist = 1) { const out = []; for (let dy = -dist; dy <= dist; dy++) for (let dx = -dist; dx <= dist; dx++) { if (dx === 0 && dy === 0) continue; const nx = x + dx, ny = y + dy; if (inBounds(nx, ny)) out.push([nx, ny]); } return out; }
+      function showHint(text) { hint.textContent = text; hint.classList.add('show'); clearTimeout(showHint._t); showHint._t = setTimeout(() => hint.classList.remove('show'), 1500); }
+      function setStatus(text, cls = '') { statusText.textContent = text; statusText.className = cls; }
+      function format3(n) { return String(n).padStart(3, '0').slice(-3); }
+
+      function updateFace(stateName = 'play') {
+        faceIcon.parentElement.classList.remove('win', 'lose');
+        if (stateName === 'win') {
+          faceIcon.parentElement.classList.add('win');
+          faceIcon.innerHTML = '<path fill="currentColor" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm-3 6.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm6 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm-5.1 6.1h6.2v1.8H9.9z"/>';
+        } else if (stateName === 'lose') {
+          faceIcon.parentElement.classList.add('lose');
+          faceIcon.innerHTML = '<path fill="currentColor" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm-3 6.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm6 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm-5.2 6.2 1.1-1.1 1.1 1.1 1.1-1.1 1.1 1.1-1.1 1.1 1.1 1.1-1.1 1.1-1.1-1.1-1.1 1.1-1.1-1.1 1.1-1.1-1.1-1.1Z"/>';
+        } else {
+          faceIcon.innerHTML = '<path fill="currentColor" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm-3 6.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm6 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm-4 4.4h2.2c1.8 0 3.2.7 4.3 2l1.5-1.2c-1.4-1.8-3.6-2.8-5.8-2.8s-4.4 1-5.8 2.8l1.5 1.2c1.1-1.3 2.5-2 4.1-2Z"/>';
+        }
+      }
+
+      function updateHUD() {
+        minesLeftEl.textContent = format3(Math.max(0, state.mineTotal - state.inventory.defer - state.inventory.shield));
+        timeLeftEl.textContent = format3(state.time);
+        movesEl.textContent = String(state.moves);
+        firstSeenText.textContent = state.firstSeen ? `первый вход: ${state.firstSeen}` : '';
+      }
+
+      function setZoom(percent, restartRender = true) {
+        state.zoom = percent / 100;
+        document.documentElement.style.setProperty('--zoom', state.zoom.toFixed(2));
+        localStorage.setItem(LS_ZOOM, String(percent));
+        if (restartRender) renderBoard();
+      }
+
+      function applyDifficulty(key, restart = true) {
+        state.diff = key;
+        const d = DIFFS[key];
+        state.w = d.w; state.h = d.h;
+        const maxW = Math.min(window.innerWidth - 28, 1050);
+        const maxH = Math.max(240, window.innerHeight - 280);
+        const size = clamp(Math.floor(Math.min(maxW / d.w, maxH / d.h)), 14, 18);
+        document.documentElement.style.setProperty('--cell', `${size}px`);
+        if (restart) startGame();
+      }
+
+      function createBoard() {
+        state.board = Array.from({ length: state.h }, (_, y) => Array.from({ length: state.w }, (_, x) => ({
+          x, y, type: 'empty', revealed: false, flagged: false, freeze: 0, pickup: null, countdown: null, active: false, radiation: 0,
+        })));
+      }
+
+      function safeZone(x, y, r = 1) { const s = new Set(); for (let yy = y - r; yy <= y + r; yy++) for (let xx = x - r; xx <= x + r; xx++) if (inBounds(xx, yy)) s.add(key(xx, yy)); return s; }
+      function pickRandomCell(pred, exclude = new Set()) { const arr = []; for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) { const c = get(x, y); if (exclude.has(key(x, y))) continue; if (!pred || pred(c)) arr.push(c); } return arr.length ? arr[rand(arr.length)] : null; }
+
+      function placeContents(sx, sy) {
+        const d = DIFFS[state.diff];
+        state.mineTotal = Math.max(8, Math.floor(state.w * state.h * d.mines));
+        const safe = safeZone(sx, sy, 1);
+        const free = [];
+        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) if (!safe.has(key(x, y))) free.push([x, y]);
+        shuffle(free);
+
+        const timerCount = Math.max(2, Math.floor(state.mineTotal * 0.045));
+        const counts = {
+          timer: timerCount,
+          normal: Math.max(1, Math.floor(state.mineTotal * 0.42)),
+          fire: Math.max(1, Math.floor(state.mineTotal * 0.10)),
+          ice: Math.max(1, Math.floor(state.mineTotal * 0.09)),
+          electric: Math.max(1, Math.floor(state.mineTotal * 0.08)),
+          radiation: Math.max(1, Math.floor(state.mineTotal * 0.07)),
+          teleport: Math.max(1, Math.floor(state.mineTotal * 0.05)),
+          mimic: Math.max(1, Math.floor(state.mineTotal * 0.04)),
+          magnet: 1,
+        };
+        let used = Object.values(counts).reduce((a, b) => a + b, 0);
+        counts.normal += Math.max(0, state.mineTotal - used);
+
+        const assign = [];
+        for (const [type, count] of Object.entries(counts)) for (let i = 0; i < count; i++) assign.push(type);
+        shuffle(assign);
+
+        for (let i = 0; i < assign.length && i < free.length; i++) {
+          const [x, y] = free[i];
+          const c = get(x, y);
+          c.type = assign[i];
+          if (c.type === 'radiation') c.radiation = 5 + rand(3);
+          if (c.type === 'timer') { c.countdown = 3 + rand(5); c.active = false; }
+        }
+
+        const empties = [];
+        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
+          const c = get(x, y);
+          if (c.type === 'empty' && !safe.has(key(x, y))) empties.push(c);
+        }
+        shuffle(empties);
+        for (let i = 0; i < timerCount && i < empties.length; i++) empties[i].pickup = 'defer';
+        const bonusKinds = ['shield', 'drone', 'bomb'];
+        for (let i = timerCount; i < timerCount + Math.max(2, Math.floor(state.mineTotal * 0.01)) && i < empties.length; i++) empties[i].pickup = bonusKinds[rand(bonusKinds.length)];
+      }
+
+      function countsMap() {
+        const counts = Array.from({ length: state.h }, () => Array(state.w).fill(0));
+        const mineLike = new Set(['normal', 'timer', 'fire', 'ice', 'electric', 'radiation', 'teleport', 'magnet', 'mimic']);
+        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
+          if (!mineLike.has(get(x, y).type)) continue;
+          for (const [nx, ny] of neighbors(x, y)) counts[ny][nx] += 1;
+        }
+        return counts;
+      }
+
+      function visibleCount(base, x, y) {
+        let noise = 0;
+        for (let yy = 0; yy < state.h; yy++) for (let xx = 0; xx < state.w; xx++) {
+          const c = get(xx, yy);
+          if (c.type === 'radiation' && c.revealed && c.radiation > 0) {
+            const d = Math.max(Math.abs(xx - x), Math.abs(yy - y));
+            if (d <= 2) noise += 1;
+          }
+        }
+        return noise ? Math.max(0, base + [-1, 0, 1][rand(3)]) : base;
+      }
+
+      function renderBoard() {
+        const counts = countsMap();
+        board.style.gridTemplateColumns = `repeat(${state.w}, var(--cell))`;
+        board.innerHTML = '';
+        const frag = document.createDocumentFragment();
+
+        for (let y = 0; y < state.h; y++) {
+          for (let x = 0; x < state.w; x++) {
+            const c = get(x, y);
+            const b = document.createElement('button');
+            b.className = 'cell';
+            b.dataset.x = x;
+            b.dataset.y = y;
+
+            if (!c.revealed && c.type === 'timer' && c.active) { b.classList.add('timer-badge'); b.dataset.timer = c.countdown; }
+            if (c.revealed) b.classList.add('revealed');
+            if (c.flagged) b.classList.add('flagged');
+            if (c.freeze > 0) b.classList.add('frozen');
+            if (!c.revealed && c.pickup) b.classList.add('bad-pickup');
+
+            if (c.revealed) {
+              if (c.type === 'empty') {
+                const n = visibleCount(counts[y][x], x, y);
+                if (n > 0) { b.textContent = String(n); b.classList.add(`num-${Math.min(8, n)}`); }
+              } else if (c.type === 'normal' || c.type === 'mimic') {
+                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-mine"></use></svg>';
+              } else if (c.type === 'timer') {
+                b.innerHTML = `<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-clock"></use></svg><span style="position:absolute;right:1px;bottom:0;font-size:8px;line-height:1">${c.countdown ?? 0}</span>`;
+              } else if (c.type === 'fire') {
+                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-fire"></use></svg>';
+              } else if (c.type === 'ice') {
+                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-ice"></use></svg>';
+              } else if (c.type === 'electric') {
+                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-electric"></use></svg>';
+              } else if (c.type === 'radiation') {
+                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-radiation"></use></svg>';
+              } else if (c.type === 'teleport') {
+                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-teleport"></use></svg>';
+              } else if (c.type === 'magnet') {
+                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-magnet"></use></svg>';
+              }
+              if (c.pickup) {
+                const map = { defer: ['#i-defer', '#2d6bff'], shield: ['#i-shield', '#1b8f3a'], drone: ['#i-drone', '#a300d6'], bomb: ['#i-bomb', '#ff5500'] };
+                const [href, color] = map[c.pickup] || ['#i-bomb', '#ff5500'];
+                b.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 16 16" width="11" height="11" style="position:absolute;left:1px;bottom:1px;color:${color};shape-rendering:crispEdges"><use href="${href}"></use></svg>`);
+              }
+            }
+            frag.appendChild(b);
+          }
+        }
+        board.appendChild(frag);
+        updateHUD();
+      }
+
+      function revealAllMines() { for (const row of state.board) for (const c of row) if (c.type !== 'empty') c.revealed = true; }
+      function activateTimersAroundOpenNumber(x, y) { const counts = countsMap(); if (counts[y][x] <= 0) return; for (const [nx, ny] of neighbors(x, y)) { const n = get(nx, ny); if (n?.type === 'timer') n.active = true; } }
+
+      function useDefer(x, y) {
+        const c = get(x, y);
+        if (state.inventory.defer <= 0) return showHint('Деферов нет.');
+        if (!c || c.revealed) return showHint('Дефер работает только по скрытой клетке.');
+        state.inventory.defer -= 1;
+        if (c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Таймерная мина обезврежена.'); }
+        else showHint('Это не таймерная мина.');
+      }
+      function useDrone(x, y) { if (state.inventory.drone <= 0) return showHint('Дронов нет.'); state.inventory.drone -= 1; shuffle(neighbors(x, y, 2)).slice(0, 6).forEach(([nx, ny]) => { const c = get(nx, ny); if (c && !c.revealed) c.revealed = true; }); showHint('Дрон показал несколько клеток.'); }
+      function useBomb(x, y) { if (state.inventory.bomb <= 0) return showHint('Бомб нет.'); state.inventory.bomb -= 1; [[x, y], ...neighbors(x, y)].forEach(([nx, ny]) => { const c = get(nx, ny); if (!c) return; if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; } c.revealed = true; }); showHint('Область открыта безопасно.'); }
+
+      function stepTimers() {
+        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
+          const c = get(x, y);
+          if (c.freeze > 0) c.freeze -= 1;
+          if (c.type === 'radiation' && c.revealed && c.radiation > 0) c.radiation -= 1;
+          if (c.type === 'timer' && c.active && c.countdown != null) {
+            c.countdown -= 1;
+            if (c.countdown <= 0) {
+              if (state.inventory.shield > 0) { state.inventory.shield -= 1; c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Щит погасил таймерную мину.'); }
+              else { state.over = true; updateFace('lose'); setStatus('взорвались', 'bad'); revealAllMines(); showHint('Таймерная мина сработала.'); }
+              return;
+            }
+          }
+        }
+      }
+
+      function randomEvent() {
+        const type = ['spawn', 'noise', 'shift'][rand(3)];
+        if (type === 'spawn') {
+          const spot = pickRandomCell(c => c.type === 'empty' && !c.revealed && !c.flagged);
+          if (!spot) return;
+          spot.type = ['normal', 'fire', 'ice', 'electric', 'radiation', 'teleport'][rand(6)];
+          if (spot.type === 'radiation') spot.radiation = 5;
+          showHint('Событие: на поле появилась новая мина.');
+        } else if (type === 'noise') {
+          showHint('Событие: цифры стали ненадёжными.');
+        } else {
+          const cells = shuffle([...Array(state.w * state.h)].map((_, i) => [i % state.w, Math.floor(i / state.w)])).slice(0, 8);
+          cells.forEach(([x, y]) => {
+            const c = get(x, y);
+            if (!c || c.revealed || c.type === 'empty') return;
+            const t = pickRandomCell(k => k.type === 'empty' && !k.revealed);
+            if (!t) return;
+            [c.type, t.type] = [t.type, c.type];
+            [c.countdown, t.countdown] = [t.countdown, c.countdown];
+            [c.active, t.active] = [t.active, c.active];
+            [c.pickup, t.pickup] = [t.pickup, c.pickup];
+          });
+          showHint('Подземный поток сместил несколько клеток.');
+        }
+      }
+
+      function worldTick() {
+        const d = DIFFS[state.diff];
+        if (!state.startTs) state.startTs = Date.now();
+        state.time = Math.floor((Date.now() - state.startTs) / 1000);
+        if (state.moves > 0 && state.moves % d.eventEvery === 0 && Math.random() < d.eventChance) randomEvent();
+        stepTimers();
+      }
+
+      function checkWin() { if (!state.over && !state.won && state.board.flat().every(c => c.type !== 'empty' || c.revealed)) { state.won = true; updateFace('win'); setStatus('победа', 'good'); showHint('Поле очищено.'); } }
+
+      function startGame() {
+        clearInterval(state.timer);
+        state.firstClick = false;
+        state.over = false;
+        state.won = false;
+        state.moves = 0;
+        state.time = 0;
+        state.startTs = 0;
+        state.mineTotal = 0;
+        state.inventory = { defer: 0, shield: 1, drone: 0, bomb: 0 };
+        createBoard();
+        updateFace('play');
+        setStatus('готов', '');
+        updateHUD();
+        renderBoard();
+        showHint('Первый клик всегда безопасный.');
+      }
+
+      function explodeMine(x, y) {
+        if (state.inventory.shield > 0) { state.inventory.shield -= 1; const c = get(x, y); c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Щит спас от взрыва.'); return; }
+        state.over = true; updateFace('lose'); setStatus('взорвались', 'bad'); revealAllMines(); const c = get(x, y); if (c) c.revealed = true; renderBoard(); showHint('Конец игры.');
+      }
+
+      function triggerCell(x, y) {
+        const c = get(x, y);
+        if (!c) return;
+        if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') return explodeMine(x, y);
+        if (c.type === 'fire') { c.revealed = true; neighbors(x, y).forEach(([nx, ny]) => openCell(nx, ny)); return; }
+        if (c.type === 'ice') { c.revealed = true; neighbors(x, y).forEach(([nx, ny]) => get(nx, ny).freeze = Math.max(get(nx, ny).freeze, 2)); return; }
+        if (c.type === 'electric') { c.revealed = true; shuffle(neighbors(x, y, 2)).slice(0, 5).forEach(([nx, ny]) => openCell(nx, ny)); return; }
+        if (c.type === 'radiation') { c.revealed = true; c.radiation = 5; return; }
+        if (c.type === 'teleport') { c.revealed = true; moveNearbyMines(x, y, 'teleport'); return; }
+        if (c.type === 'magnet') { c.revealed = true; moveNearbyMines(x, y, 'magnet'); }
+      }
+
+      function moveNearbyMines(x, y, mode) {
+        const source = neighbors(x, y, 1).filter(([nx, ny]) => { const c = get(nx, ny); return c && !c.revealed && c.type !== 'empty'; });
+        const empties = [];
+        for (let yy = 0; yy < state.h; yy++) for (let xx = 0; xx < state.w; xx++) { const c = get(xx, yy); if (!c.revealed && c.type === 'empty') empties.push([xx, yy]); }
+        shuffle(empties);
+        for (const [sx, sy] of source) {
+          if (!empties.length) break;
+          const [dx, dy] = empties.pop();
+          const a = get(sx, sy); const b = get(dx, dy);
+          [a.type, b.type] = [b.type, a.type]; [a.countdown, b.countdown] = [b.countdown, a.countdown]; [a.active, b.active] = [b.active, a.active]; [a.pickup, b.pickup] = [b.pickup, a.pickup];
+        }
+        showHint(mode === 'magnet' ? 'Магнит сдвинул ближайшие мины.' : 'Телепорт перемешал соседние клетки.');
+      }
+
+      function handleFlag(x, y) { const c = get(x, y); if (!c || c.revealed) return; c.flagged = !c.flagged; }
+
+      function openCell(x, y) {
+        const c = get(x, y);
+        if (!c || c.revealed || c.flagged || c.freeze > 0 || state.over || state.won) return;
+        if (!state.firstClick) { state.firstClick = true; placeContents(x, y); }
+        c.revealed = true;
+        if (c.pickup) { state.inventory[c.pickup] += 1; showHint(`Подобрано: ${c.pickup}.`); c.pickup = null; }
+        if (c.type === 'empty') {
+          const counts = countsMap();
+          if (counts[y][x] === 0) {
+            for (const [nx, ny] of neighbors(x, y)) {
+              const n = get(nx, ny);
+              if (n && !n.revealed && !n.flagged && n.type === 'empty') floodReveal(nx, ny);
+            }
+          }
+          activateTimersAroundOpenNumber(x, y);
+        } else {
+          triggerCell(x, y);
+        }
+      }
+
+      function floodReveal(x, y) {
+        const stack = [[x, y]];
+        const seen = new Set();
+        const counts = countsMap();
+        while (stack.length) {
+          const [cx, cy] = stack.pop();
+          const kk = key(cx, cy);
+          if (seen.has(kk)) continue;
+          seen.add(kk);
+          const c = get(cx, cy);
+          if (!c || c.revealed || c.flagged || c.freeze > 0) continue;
+          c.revealed = true;
+          if (c.pickup) { state.inventory[c.pickup] += 1; c.pickup = null; }
+          if (c.type === 'empty') {
+            if (counts[cy][cx] === 0) for (const [nx, ny] of neighbors(cx, cy)) { const n = get(nx, ny); if (n && !n.revealed && !n.flagged && n.type === 'empty') stack.push([nx, ny]); }
+            activateTimersAroundOpenNumber(cx, cy);
+          }
+        }
+      }
+
+      function useDefer(x, y) {
+        const c = get(x, y);
+        if (state.inventory.defer <= 0) return showHint('Деферов нет.');
+        if (!c || c.revealed) return showHint('Дефер работает только по скрытой клетке.');
+        state.inventory.defer -= 1;
+        if (c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Таймерная мина обезврежена.'); }
+        else showHint('Это не таймерная мина.');
+      }
+
+      function useDrone(x, y) { if (state.inventory.drone <= 0) return showHint('Дронов нет.'); state.inventory.drone -= 1; shuffle(neighbors(x, y, 2)).slice(0, 6).forEach(([nx, ny]) => { const c = get(nx, ny); if (c && !c.revealed) c.revealed = true; }); showHint('Дрон показал несколько клеток.'); }
+      function useBomb(x, y) { if (state.inventory.bomb <= 0) return showHint('Бомб нет.'); state.inventory.bomb -= 1; [[x, y], ...neighbors(x, y)].forEach(([nx, ny]) => { const c = get(nx, ny); if (!c) return; if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; } c.revealed = true; }); showHint('Область открыта безопасно.'); }
+
+      function handleCell(x, y) {
+        const c = get(x, y);
+        if (!c || state.over || state.won) return;
+        if (!state.firstClick) { state.firstClick = true; placeContents(x, y); }
+        if (state.selectedTool === 'flag') handleFlag(x, y);
+        else if (state.selectedTool === 'defer') useDefer(x, y);
+        else if (state.selectedTool === 'drone') useDrone(x, y);
+        else if (state.selectedTool === 'bomb') useBomb(x, y);
+        else openCell(x, y);
+        if (!state.over && !state.won) { state.moves += 1; worldTick(); renderBoard(); checkWin(); }
+      }
+
+      function openTutorial() { tutorialLayer.classList.add('show'); renderTutorial(); }
+      function closeTutorial() { tutorialLayer.classList.remove('show'); localStorage.setItem(LS_TUTORIAL, '1'); }
+      function openWiki() { wikiLayer.classList.add('show'); renderWiki(); }
+      function closeWiki() { wikiLayer.classList.remove('show'); }
+
+      function renderTutorial() {
+        const steps = [
+          'Нажми на любую клетку. Первый ход создаёт безопасную зону вокруг старта.',
+          'Флаг ставь на подозрительные клетки. Таймерные мины не видно заранее — они молчат, пока рядом не откроют число.',
+          'Дефер работает только по таймерным минам и не лежит на поле как явная подсказка.',
+          'Огонь, лёд, электричество, телепорты и магниты добавляют хаос прямо по ходу партии.',
+          'Сложность меняет размер поля: от нормального до очень большого.',
+        ];
+        const titles = ['Старт', 'Флаги', 'Дефер', 'Хаос', 'Сложность'];
+        tutorialMeta.textContent = state.firstSeen ? `первая дата входа: ${state.firstSeen}` : 'новый игрок';
+        tutorialText.textContent = steps[state.tutorialStep];
+        tutorialSteps.innerHTML = steps.map((t, i) => `<div class="step-row"><div class="dot ${i === state.tutorialStep ? 'done' : ''}"></div><div><strong>${titles[i]}</strong><div class="small-note">${t}</div></div></div>`).join('');
+        tutorialDiffs.innerHTML = Object.entries(DIFFS).map(([k, d]) => `<button class="mini-btn ${k === state.diff ? 'active' : ''}" data-diff="${k}">${d.label} <span class="small-note">${d.w}×${d.h}</span></button>`).join('');
+        tutorialDiffs.querySelectorAll('[data-diff]').forEach(btn => btn.addEventListener('click', () => { difficultySelect.value = btn.dataset.diff; applyDifficulty(btn.dataset.diff, true); renderTutorial(); }));
+        tutorialBack.textContent = state.tutorialStep === 0 ? 'Пропустить' : 'Назад';
+        tutorialNext.textContent = state.tutorialStep === steps.length - 1 ? 'Старт' : 'Дальше';
+      }
+
+      function renderWiki() {
+        const tabs = { modes: { label: 'Механики', icon: '#i-wiki' }, mines: { label: 'Мины', icon: '#i-mine' }, items: { label: 'Предметы', icon: '#i-shield' }, ui: { label: 'Интерфейс', icon: '#i-clock' }, tips: { label: 'Советы', icon: '#i-bomb' } };
+        wikiTabs.innerHTML = Object.entries(tabs).map(([k, v]) => `<button class="mini-btn ${state.wikiTab === k ? 'active' : ''}" data-wiki="${k}"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="${v.icon}"></use></svg> ${v.label}</button>`).join('');
+        wikiTabs.querySelectorAll('[data-wiki]').forEach(btn => btn.addEventListener('click', () => { state.wikiTab = btn.dataset.wiki; renderWiki(); }));
+
+        const content = {
+          modes: `
+            <div class="grid-cards">
+              <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-wiki"></use></svg> Основная цель</h3><ul><li>Открыть все безопасные клетки.</li><li>Не открывать мины напрямую.</li><li>Справиться с хаосом, который создают специальные клетки и события.</li></ul></div>
+              <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-clock"></use></svg> Как движется партия</h3><ul><li>Каждый ход двигает мир вперёд.</li><li>События могут добавлять новые угрозы.</li><li>Таймерные мины начинают жить только после того, как рядом открыт номер.</li></ul></div>
+            </div>
+            <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-teleport"></use></svg> Что делает поле особенным</h3><ul><li>Некоторые мины меняют соседей местами.</li><li>Радиация делает цифры неидеальными.</li><li>На больших сложностях карта заметно больше и плотнее.</li><li>Случайные события добавляют новый слой напряжения без второго игрока и без PvP.</li></ul></div>
+          `,
+          mines: `
+            <div class="mini-list">
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-mine"></use></svg> Обычная мина</strong><div class="small-note">Стандартная мина. Никаких трюков: открыл — проиграл.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-clock"></use></svg> Таймерная мина</strong><div class="small-note">Скрыта до активации. Не появляется как явная подсказка и начинает работать только после открытия рядом цифры. Когда активна, в углу виден маленький таймер.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-fire"></use></svg> Огненная мина</strong><div class="small-note">После открытия зажигает соседние клетки и может запустить цепочку раскрытий.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-ice"></use></svg> Ледяная мина</strong><div class="small-note">Замораживает соседние клетки на короткое время. Замороженные клетки нельзя открыть.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-electric"></use></svg> Электрическая мина</strong><div class="small-note">Может открыть несколько соседних клеток сразу. Очень любит ломать аккуратные планы.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-radiation"></use></svg> Радиационная мина</strong><div class="small-note">Цифры рядом могут врать на ±1, поэтому доверять им нужно осторожно.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-teleport"></use></svg> Телепорт</strong><div class="small-note">Меняет местами часть соседних мин с пустыми клетками и после этого поле читается хуже.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-magnet"></use></svg> Магнит</strong><div class="small-note">Сдвигает ближайшие мины. Из-за него карта может немного «плыть».</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-mine"></use></svg> Мимик</strong><div class="small-note">Маскируется под обычную клеточную логику. Выглядит тихо, но опасен как мина.</div></div>
+            </div>
+          `,
+          items: `
+            <div class="mini-list">
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-defer"></use></svg> Дефер</strong><div class="small-note">Обезвреживает таймерную мину. Он не отображается заранее и попадает в инвентарь скрыто, как редкая находка. Количество деферов примерно соответствует числу таймерных мин.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-shield"></use></svg> Щит</strong><div class="small-note">Поглощает один взрыв. Если бы не он, некоторые партии заканчивались бы слишком быстро.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-drone"></use></svg> Дрон-разведчик</strong><div class="small-note">Показывает несколько скрытых клеток рядом с выбранной точкой. Удобен, когда карта уже слишком шумная.</div></div>
+              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-bomb"></use></svg> Бомба для открытия</strong><div class="small-note">Открывает маленькую область безопасно. Полезна, если хочется немного воздуха в тесной зоне.</div></div>
+            </div>
+          `,
+          ui: `
+            <div class="mini-list">
+              <div class="mini-item"><strong>Верхняя панель</strong><div class="small-note">Слева — мины, по центру — кнопка новой игры, справа — таймер. Это сделано специально как у старого сапёра.</div></div>
+              <div class="mini-item"><strong>Цветные цифры</strong><div class="small-note">1 синий, 2 зелёный, 3 красный, дальше более спокойные оттенки. Это важно: цвет помогает читать поле быстрее.</div></div>
+              <div class="mini-item"><strong>Кнопки снизу</strong><div class="small-note">Открыть, флаг, дефер, дрон, бомба и Книжечка — чтобы не лазить в лишние меню.</div></div>
+              <div class="mini-item"><strong>Зум</strong><div class="small-note">Ползунок зума увеличивает или уменьшает поле без смены сложности. Это удобно, когда хочешь больше видеть на телефоне.</div></div>
+            </div>
+          `,
+          tips: `
+            <div class="grid-cards">
+              <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-bomb"></use></svg> Для выживания</h3><ul><li>Сначала раскрывай большие пустые зоны.</li><li>Флаги ставь только там, где действительно сомневаешься.</li><li>Дефер не трать впустую: он ценнее, чем кажется.</li></ul></div>
+              <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-wiki"></use></svg> Для хаоса</h3><ul><li>Если поле уже шумит, используй дрон или безопасную бомбу.</li><li>Не спеши с крупными цепочками, если рядом есть лёд или электричество.</li><li>Таймерные мины лучше гасить раньше, пока они ещё не разогнались.</li></ul></div>
+            </div>
+          `,
+        };
+        wikiBody.innerHTML = content[state.wikiTab];
+      }
+
+      function renderTutorial() {
+        const steps = [
+          'Нажми на любую клетку. Первый ход создаёт безопасную зону вокруг старта.',
+          'Флаг ставь на подозрительные клетки. Таймерные мины не видно заранее — они молчат, пока рядом не откроют число.',
+          'Дефер работает только по таймерным минам и не лежит на поле как явная подсказка.',
+          'Огонь, лёд, электричество, телепорты и магниты добавляют хаос прямо по ходу партии.',
+          'Сложность меняет размер поля: от нормального до очень большого.',
+        ];
+        const titles = ['Старт', 'Флаги', 'Дефер', 'Хаос', 'Сложность'];
+        tutorialMeta.textContent = state.firstSeen ? `первая дата входа: ${state.firstSeen}` : 'новый игрок';
+        tutorialText.textContent = steps[state.tutorialStep];
+        tutorialSteps.innerHTML = steps.map((t, i) => `<div class="step-row"><div class="dot ${i === state.tutorialStep ? 'done' : ''}"></div><div><strong>${titles[i]}</strong><div class="small-note">${t}</div></div></div>`).join('');
+        tutorialDiffs.innerHTML = Object.entries(DIFFS).map(([k, d]) => `<button class="mini-btn ${k === state.diff ? 'active' : ''}" data-diff="${k}">${d.label} <span class="small-note">${d.w}×${d.h}</span></button>`).join('');
+        tutorialDiffs.querySelectorAll('[data-diff]').forEach(btn => btn.addEventListener('click', () => { difficultySelect.value = btn.dataset.diff; applyDifficulty(btn.dataset.diff, true); renderTutorial(); }));
+        tutorialBack.textContent = state.tutorialStep === 0 ? 'Пропустить' : 'Назад';
+        tutorialNext.textContent = state.tutorialStep === steps.length - 1 ? 'Старт' : 'Дальше';
+      }
+
+      function showTutorialIfNeeded() {
+        if (!localStorage.getItem(LS_FIRST)) {
+          const date = new Date().toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
+          localStorage.setItem(LS_FIRST, date);
+          state.firstSeen = date;
+        }
+        if (!localStorage.getItem(LS_TUTORIAL)) openTutorial();
+      }
+
+      function openTutorial() { tutorialLayer.classList.add('show'); renderTutorial(); }
+      function closeTutorial() { tutorialLayer.classList.remove('show'); localStorage.setItem(LS_TUTORIAL, '1'); }
+
+      function setTool(tool) { state.selectedTool = tool; toolButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tool === tool)); }
+      function openWiki() { wikiLayer.classList.add('show'); renderWiki(); }
+      function closeWiki() { wikiLayer.classList.remove('show'); }
+
+      function startGame() {
+        clearInterval(state.timer);
+        state.firstClick = false;
+        state.over = false;
+        state.won = false;
+        state.moves = 0;
+        state.time = 0;
+        state.startTs = 0;
+        state.mineTotal = 0;
+        state.inventory = { defer: 0, shield: 1, drone: 0, bomb: 0 };
+        createBoard();
+        updateFace('play');
+        setStatus('готов', '');
+        updateHUD();
+        renderBoard();
+        showHint('Первый клик всегда безопасный.');
+      }
+
+      function useDefer(x, y) {
+        const c = get(x, y);
+        if (state.inventory.defer <= 0) return showHint('Деферов нет.');
+        if (!c || c.revealed) return showHint('Дефер работает только по скрытой клетке.');
+        state.inventory.defer -= 1;
+        if (c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Таймерная мина обезврежена.'); }
+        else showHint('Это не таймерная мина.');
+      }
+      function useDrone(x, y) { if (state.inventory.drone <= 0) return showHint('Дронов нет.'); state.inventory.drone -= 1; shuffle(neighbors(x, y, 2)).slice(0, 6).forEach(([nx, ny]) => { const c = get(nx, ny); if (c && !c.revealed) c.revealed = true; }); showHint('Дрон показал несколько клеток.'); }
+      function useBomb(x, y) { if (state.inventory.bomb <= 0) return showHint('Бомб нет.'); state.inventory.bomb -= 1; [[x, y], ...neighbors(x, y)].forEach(([nx, ny]) => { const c = get(nx, ny); if (!c) return; if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; } c.revealed = true; }); showHint('Область открыта безопасно.'); }
+
+      function activateTimersAroundOpenNumber(x, y) { const counts = countsMap(); if (counts[y][x] <= 0) return; for (const [nx, ny] of neighbors(x, y)) { const n = get(nx, ny); if (n?.type === 'timer') n.active = true; } }
+      function stepTimers() {
+        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
+          const c = get(x, y);
+          if (c.freeze > 0) c.freeze -= 1;
+          if (c.type === 'radiation' && c.revealed && c.radiation > 0) c.radiation -= 1;
+          if (c.type === 'timer' && c.active && c.countdown != null) {
+            c.countdown -= 1;
+            if (c.countdown <= 0) {
+              if (state.inventory.shield > 0) { state.inventory.shield -= 1; c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Щит погасил таймерную мину.'); }
+              else { state.over = true; updateFace('lose'); setStatus('взорвались', 'bad'); revealAllMines(); showHint('Таймерная мина сработала.'); }
+              return;
+            }
+          }
+        }
+      }
+
+      function randomEvent() {
+        const type = ['spawn', 'noise', 'shift'][rand(3)];
+        if (type === 'spawn') {
+          const spot = pickRandomCell(c => c.type === 'empty' && !c.revealed && !c.flagged);
+          if (!spot) return;
+          spot.type = ['normal', 'fire', 'ice', 'electric', 'radiation', 'teleport'][rand(6)];
+          if (spot.type === 'radiation') spot.radiation = 5;
+          showHint('Событие: на поле появилась новая мина.');
+        } else if (type === 'noise') {
+          showHint('Событие: цифры стали ненадёжными.');
+        } else {
+          const cells = shuffle([...Array(state.w * state.h)].map((_, i) => [i % state.w, Math.floor(i / state.w)])).slice(0, 8);
+          cells.forEach(([x, y]) => {
+            const c = get(x, y);
+            if (!c || c.revealed || c.type === 'empty') return;
+            const t = pickRandomCell(k => k.type === 'empty' && !k.revealed);
+            if (!t) return;
+            [c.type, t.type] = [t.type, c.type];
+            [c.countdown, t.countdown] = [t.countdown, c.countdown];
+            [c.active, t.active] = [t.active, c.active];
+            [c.pickup, t.pickup] = [t.pickup, c.pickup];
+          });
+          showHint('Подземный поток сместил несколько клеток.');
+        }
+      }
+
+      function worldTick() {
+        const d = DIFFS[state.diff];
+        if (!state.startTs) state.startTs = Date.now();
+        state.time = Math.floor((Date.now() - state.startTs) / 1000);
+        if (state.moves > 0 && state.moves % d.eventEvery === 0 && Math.random() < d.eventChance) randomEvent();
+        stepTimers();
+      }
+
+      function checkWin() { if (!state.over && !state.won && state.board.flat().every(c => c.type !== 'empty' || c.revealed)) { state.won = true; updateFace('win'); setStatus('победа', 'good'); showHint('Поле очищено.'); } }
+
+      function explodeMine(x, y) {
+        if (state.inventory.shield > 0) { state.inventory.shield -= 1; const c = get(x, y); c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Щит спас от взрыва.'); return; }
+        state.over = true; updateFace('lose'); setStatus('взорвались', 'bad'); revealAllMines(); const c = get(x, y); if (c) c.revealed = true; renderBoard(); showHint('Конец игры.');
+      }
+      function triggerCell(x, y) {
+        const c = get(x, y); if (!c) return;
+        if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') return explodeMine(x, y);
+        if (c.type === 'fire') { c.revealed = true; neighbors(x, y).forEach(([nx, ny]) => openCell(nx, ny)); return; }
+        if (c.type === 'ice') { c.revealed = true; neighbors(x, y).forEach(([nx, ny]) => get(nx, ny).freeze = Math.max(get(nx, ny).freeze, 2)); return; }
+        if (c.type === 'electric') { c.revealed = true; shuffle(neighbors(x, y, 2)).slice(0, 5).forEach(([nx, ny]) => openCell(nx, ny)); return; }
+        if (c.type === 'radiation') { c.revealed = true; c.radiation = 5; return; }
+        if (c.type === 'teleport') { c.revealed = true; moveNearbyMines(x, y, 'teleport'); return; }
+        if (c.type === 'magnet') { c.revealed = true; moveNearbyMines(x, y, 'magnet'); }
+      }
+      function moveNearbyMines(x, y, mode) {
+        const source = neighbors(x, y, 1).filter(([nx, ny]) => { const c = get(nx, ny); return c && !c.revealed && c.type !== 'empty'; });
+        const empties = []; for (let yy = 0; yy < state.h; yy++) for (let xx = 0; xx < state.w; xx++) { const c = get(xx, yy); if (!c.revealed && c.type === 'empty') empties.push([xx, yy]); }
+        shuffle(empties);
+        for (const [sx, sy] of source) {
+          if (!empties.length) break;
+          const [dx, dy] = empties.pop();
+          const a = get(sx, sy), b = get(dx, dy);
+          [a.type, b.type] = [b.type, a.type]; [a.countdown, b.countdown] = [b.countdown, a.countdown]; [a.active, b.active] = [b.active, a.active]; [a.pickup, b.pickup] = [b.pickup, a.pickup];
+        }
+        showHint(mode === 'magnet' ? 'Магнит сдвинул ближайшие мины.' : 'Телепорт перемешал соседние клетки.');
+      }
+
+      function handleFlag(x, y) { const c = get(x, y); if (!c || c.revealed) return; c.flagged = !c.flagged; }
+      function openCell(x, y) {
+        const c = get(x, y);
+        if (!c || c.revealed || c.flagged || c.freeze > 0 || state.over || state.won) return;
+        if (!state.firstClick) { state.firstClick = true; placeContents(x, y); }
+        c.revealed = true;
+        if (c.pickup) { state.inventory[c.pickup] += 1; showHint(`Подобрано: ${c.pickup}.`); c.pickup = null; }
+        if (c.type === 'empty') {
+          const counts = countsMap();
+          if (counts[y][x] === 0) {
+            for (const [nx, ny] of neighbors(x, y)) {
+              const n = get(nx, ny);
+              if (n && !n.revealed && !n.flagged && n.type === 'empty') floodReveal(nx, ny);
+            }
+          }
+          activateTimersAroundOpenNumber(x, y);
+        } else triggerCell(x, y);
+      }
+      function floodReveal(x, y) {
+        const stack = [[x, y]];
+        const seen = new Set();
+        const counts = countsMap();
+        while (stack.length) {
+          const [cx, cy] = stack.pop();
+          const kk = key(cx, cy);
+          if (seen.has(kk)) continue;
+          seen.add(kk);
+          const c = get(cx, cy);
+          if (!c || c.revealed || c.flagged || c.freeze > 0) continue;
+          c.revealed = true;
+          if (c.pickup) { state.inventory[c.pickup] += 1; c.pickup = null; }
+          if (c.type === 'empty') {
+            if (counts[cy][cx] === 0) for (const [nx, ny] of neighbors(cx, cy)) { const n = get(nx, ny); if (n && !n.revealed && !n.flagged && n.type === 'empty') stack.push([nx, ny]); }
+            activateTimersAroundOpenNumber(cx, cy);
+          }
+        }
+      }
+      function handleCell(x, y) {
+        const c = get(x, y); if (!c || state.over || state.won) return;
+        if (!state.firstClick) { state.firstClick = true; placeContents(x, y); }
+        if (state.selectedTool === 'flag') handleFlag(x, y);
+        else if (state.selectedTool === 'defer') useDefer(x, y);
+        else if (state.selectedTool === 'drone') useDrone(x, y);
+        else if (state.selectedTool === 'bomb') useBomb(x, y);
+        else openCell(x, y);
+        if (!state.over && !state.won) { state.moves += 1; worldTick(); renderBoard(); checkWin(); }
+      }
+
+      board.addEventListener('click', e => { const cell = e.target.closest('.cell'); if (!cell) return; handleCell(Number(cell.dataset.x), Number(cell.dataset.y)); });
+      board.addEventListener('contextmenu', e => { e.preventDefault(); const cell = e.target.closest('.cell'); if (!cell) return; if (!state.firstClick) { state.firstClick = true; placeContents(Number(cell.dataset.x), Number(cell.dataset.y)); } handleFlag(Number(cell.dataset.x), Number(cell.dataset.y)); if (!state.over && !state.won) { state.moves += 1; worldTick(); renderBoard(); checkWin(); } });
+      resetBtn.addEventListener('click', startGame);
+      toolButtons.forEach(btn => btn.addEventListener('click', () => { if (btn.dataset.tool === 'wiki') return openWiki(); setTool(btn.dataset.tool); }));
+      difficultySelect.addEventListener('change', () => applyDifficulty(difficultySelect.value, true));
+      zoomSlider.addEventListener('input', () => setZoom(Number(zoomSlider.value), true));
+      tutorialBack.addEventListener('click', () => { if (state.tutorialStep === 0) closeTutorial(); else { state.tutorialStep -= 1; renderTutorial(); } });
+      tutorialNext.addEventListener('click', () => { const last = 4; if (state.tutorialStep >= last) closeTutorial(); else { state.tutorialStep += 1; renderTutorial(); } });
+      wikiClose.addEventListener('click', closeWiki);
+      tutorialLayer.addEventListener('click', e => { if (e.target === tutorialLayer) closeTutorial(); });
+      wikiLayer.addEventListener('click', e => { if (e.target === wikiLayer) closeWiki(); });
+      window.addEventListener('resize', () => applyDifficulty(state.diff, false));
+      window.addEventListener('keydown', e => { if (e.key === 'Escape') { closeTutorial(); closeWiki(); } if (e.key === '1') setTool('open'); if (e.key === '2') setTool('flag'); if (e.key === '3') setTool('defer'); if (e.key === '4') setTool('drone'); if (e.key === '5') setTool('bomb'); });
+
+      function init() {
+        if (!state.firstSeen) {
+          const date = new Date().toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
+          localStorage.setItem(LS_FIRST, date);
+          state.firstSeen = date;
+        }
+        setZoom(state.zoom * 100, false);
+        zoomSlider.value = String(Math.round(state.zoom * 100));
+        applyDifficulty(state.diff, true);
+        startGame();
+        setTool('open');
+        updateHUD();
+        renderBoard();
+        showTutorialIfNeeded();
+        showHint('Нажми на любую клетку, чтобы начать.');
+      }
+
+      init();
+    })();
+  </script></body>
+                                                                                                                                         </html>
