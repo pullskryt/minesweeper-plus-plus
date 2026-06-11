@@ -243,6 +243,10 @@ body {
     <button class="win98-btn" onclick="showDifficultyModal()">Сменить сложность</button>
     <button class="win98-btn" onclick="startTutorial()">Обучение</button>
     <button class="win98-btn" onclick="showWiki()">Книжечка</button>
+    <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+      <span id="volumeIcon" title="Громкость">🔊</span>
+      <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.7" style="width:80px;">
+    </div>
   </div>
 </div>
 
@@ -304,6 +308,49 @@ const ITEM_WIKI = [
 
 let G = null;
 let flagMode = false;
+let SFX_VOLUME = parseFloat(localStorage.getItem('ms_sfx_volume')) || 0.7;
+
+function playSound(id) {
+  const audio = document.getElementById(id);
+  if (audio) {
+    audio.volume = SFX_VOLUME;
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }
+}
+
+// Volume control initialization
+function initVolumeControl() {
+  const slider = document.getElementById('volumeSlider');
+  const icon = document.getElementById('volumeIcon');
+  if (!slider || !icon) return;
+  slider.value = SFX_VOLUME;
+  updateVolumeIcon();
+  slider.addEventListener('input', (e) => {
+    SFX_VOLUME = parseFloat(e.target.value);
+    localStorage.setItem('ms_sfx_volume', SFX_VOLUME);
+    updateVolumeIcon();
+  });
+}
+function updateVolumeIcon() {
+  const icon = document.getElementById('volumeIcon');
+  if (!icon) return;
+  if (SFX_VOLUME === 0) {
+    icon.textContent = '🔇';
+  } else if (SFX_VOLUME < 0.5) {
+    icon.textContent = '🔈';
+  } else if (SFX_VOLUME < 0.8) {
+    icon.textContent = '🔉';
+  } else {
+    icon.textContent = '🔊';
+  }
+}
+// Initialize volume control after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initVolumeControl);
+} else {
+  initVolumeControl();
+}
 
 function newState(diffKey){
   const cfg = DIFFS[diffKey];
@@ -448,6 +495,7 @@ function openCell(state,x,y, fromChain=false){
   }
 
   if(!fromChain) state.moves++;
+  if(!fromChain) playSound('snd-click');
 
   const cell = state.board[x][y];
   state.revealed[x][y] = true;
@@ -522,11 +570,13 @@ function triggerExplosion(state,x,y){
     state.inventory.shield--;
     state.flagged[x][y] = true;
     setStatus('Щит поглотил взрыв.');
+    playSound('snd-item');
     return;
   }
   state.over = true;
   state.won = false;
   state.boomCell = [x,y];
+  playSound('snd-mine');
 }
 
 function igniteAdjacent(state,x,y){
@@ -631,6 +681,7 @@ function useItemOnCell(state,item,x,y){
       state.flagged[x][y]=true;
       state.inventory.defer--;
       setStatus('Таймерная мина обезврежена.');
+      playSound('snd-item');
     } else {
       setStatus('Здесь нет активной таймерной мины.');
     }
@@ -649,6 +700,7 @@ function useItemOnCell(state,item,x,y){
       }
     }
     setStatus('Безопасная бомба открыла область вокруг выбранной клетки.');
+    playSound('snd-item');
     checkWin(state);
   }
   state.selectedItem=null;
@@ -667,6 +719,7 @@ function useDrone(state){
     const [x,y]=cands.splice(idx,1)[0];
     openCell(state,x,y,true);
   }
+  playSound('snd-item');
   setStatus('Дрон открыл несколько безопасных клеток.');
   checkWin(state);
   render();
@@ -864,6 +917,7 @@ function doFlag(x,y){
   if(!G.boardReady) return;
   if(G.revealed[x][y]) return;
   G.flagged[x][y]=!G.flagged[x][y];
+  playSound('snd-flag');
   render();
 }
 
@@ -915,6 +969,11 @@ function showResult(won){
   document.getElementById('resultText').textContent = won
     ? `Поле очищено за ${G.moves} ходов.`
     : 'Ты подорвался. Попробуй ещё раз.';
+  if (won) {
+    playSound('snd-win');
+  } else {
+    playSound('snd-lose');
+  }
   document.getElementById('resultModal').classList.add('show');
 }
 function closeResultAndShowDiff(){
@@ -978,7 +1037,7 @@ const TUT_STEPS = [
   { text:'Открой клетку с Дефером. Этот предмет нужен для обезвреживания таймерной мины.', target:[5,3], action:{type:'open',x:5,y:3} },
   { text:'Нажми на иконку Дефера внизу, чтобы выбрать его.', target:null, action:{type:'selectDefer'} },
   { text:'Теперь нажми на таймерную мину, чтобы обезвредить её.', target:[3,5], action:{type:'useDefer',x:3,y:5} },
-  { text:'Сейчас учебное поле полностью очищается, чтобы показать финальный вид.', target:null, action:null },
+  { text:'Сейчас учебное поле полностью очищается, чтобы показать финальный вид.', target:null, action:null},
   { text:'Готово. Так выглядит полностью вычищенная учебная доска. Можно переходить к настоящей игре.', target:null, action:null, final:true },
 ];
 
@@ -1193,5 +1252,12 @@ function endTutorial(){
   }
 })();
 </script>
+
+<audio id="snd-click" preload="auto" src="assets/click.mp3"></audio>
+<audio id="snd-flag" preload="auto" src="assets/tick.mp3"></audio>
+<audio id="snd-mine" preload="auto" src="assets/lose_minesweeper.mp3"></audio>
+<audio id="snd-win" preload="auto" src="assets/start.mp3"></audio>
+<audio id="snd-lose" preload="auto" src="assets/lose_minesweeper.mp3"></audio>
+<audio id="snd-item" preload="auto" src="assets/tick.mp3"></audio>
 </body>
 </html>
