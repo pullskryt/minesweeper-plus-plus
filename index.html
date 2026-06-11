@@ -1,1204 +1,1197 @@
-<!DOCTYPE html><html lang="ru">
+<!DOCTYPE html>
+<html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Minesweeper: Overload Edition</title>
-  <style>
-    :root {
-      --bg: #c0c0c0;
-      --panel: #d6d6d6;
-      --panel-light: #fefefe;
-      --ink: #111;
-      --cell: 18px;
-      --zoom: 1;
-      --shadow-in: inset 1px 1px 0 rgba(255,255,255,.92), inset -1px -1px 0 rgba(0,0,0,.22);
-      --shadow-out: 0 10px 26px rgba(0,0,0,.18);
-      --blue: #0000ff;
-      --green: #008000;
-      --red: #ff0000;
-      --purple: #800080;
-      --teal: #008080;
-      --orange: #ff8000;
-      --yellow: #d6a000;
-      --cyan: #00a0ff;
-      --magenta: #cc00cc;
-    }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      height: 100%;
-      overflow: hidden;
-      background: linear-gradient(180deg, #d7d7d7, #b8b8b8 58%, #a9a9a9);
-      font-family: Tahoma, Verdana, Arial, sans-serif;
-      color: var(--ink);
-    }
-    button, select, input { font: inherit; }
-    .app {
-      height: 100dvh;
-      display: grid;
-      grid-template-rows: auto auto 1fr auto;
-      gap: 8px;
-      padding: 8px;
-      padding-bottom: calc(8px + env(safe-area-inset-bottom));
-    }
-    .retro {
-      background: linear-gradient(180deg, var(--panel-light), var(--panel));
-      border: 1px solid rgba(0,0,0,.22);
-      box-shadow: var(--shadow-in), var(--shadow-out);
-      border-radius: 10px;
-    }
-    .titlebar {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-      font-size: 12px;
-      opacity: .84;
-      padding: 0 2px;
-    }
-    .titlebar strong { font-size: 13px; }
-    .hud {
-      padding: 10px;
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      gap: 10px;
-      align-items: center;
-    }
-    .lcd {
-      height: 48px;
-      border-radius: 8px;
-      background: linear-gradient(180deg, #111, #222);
-      border: 1px solid rgba(0,0,0,.4);
-      color: #ff2a2a;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: .08em;
-      text-shadow: 0 0 8px rgba(255,50,50,.3);
-    }
-    .lcd .wrap {
-      display: grid;
-      place-items: center;
-      gap: 1px;
-      line-height: 1;
-    }
-    .lcd .label {
-      color: rgba(255,130,130,.72);
-      font-size: 9px;
-      letter-spacing: .15em;
-    }
-    .lcd .value {
-      font-size: 24px;
-      min-width: 72px;
-      text-align: center;
-      font-weight: 900;
-    }
-    .face-wrap { display: grid; place-items: center; }
-    .face-btn {
-      width: 52px;
-      height: 52px;
-      border-radius: 10px;
-      border: 1px solid rgba(0,0,0,.2);
-      background: linear-gradient(180deg, #fff, #d7d7d7);
-      box-shadow: var(--shadow-in), var(--shadow-out);
-      display: grid;
-      place-items: center;
-      cursor: pointer;
-      color: #333;
-      padding: 0;
-    }
-    .face-btn svg { width: 32px; height: 32px; }
-    .face-btn:active { transform: translateY(1px); }
-    .face-btn.win { color: #008800; }
-    .face-btn.lose { color: #cc0000; }
-    .board-wrap {
-      position: relative;
-      overflow: auto;
-      padding: 8px;
-      border-radius: 12px;
-      background: rgba(0,0,0,.08);
-      border: 1px solid rgba(0,0,0,.14);
-      box-shadow: inset 0 1px 10px rgba(0,0,0,.08);
-      -webkit-overflow-scrolling: touch;
-    }
-    .board {
-      width: max-content;
-      margin: 0 auto;
-      display: grid;
-      gap: 1px;
-      background: rgba(0,0,0,.38);
-      padding: 1px;
-      border-radius: 7px;
-      touch-action: manipulation;
-      transform: scale(var(--zoom));
-      transform-origin: top center;
-    }
-    .cell {
-      width: var(--cell);
-      height: var(--cell);
-      display: grid;
-      place-items: center;
-      position: relative;
-      border: 0;
-      padding: 0;
-      margin: 0;
-      cursor: pointer;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-      background: linear-gradient(180deg, #fafafa, #d4d4d4);
-      box-shadow: inset 1px 1px 0 rgba(255,255,255,.92), inset -1px -1px 0 rgba(0,0,0,.2);
-      color: #111;
-      font-weight: 900;
-      font-size: calc(var(--cell) * .58);
-      line-height: 1;
-      image-rendering: pixelated;
-    }
-    .cell.revealed {
-      background: linear-gradient(180deg, #ededed, #bdbdbd);
-      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
-    }
-    .cell.flagged::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background:
-        linear-gradient(90deg, transparent 52%, #80542d 53% 56%, transparent 57%),
-        linear-gradient(135deg, transparent 42%, #d11919 43% 65%, transparent 66%);
-      clip-path: polygon(30% 15%, 71% 15%, 62% 34%, 71% 48%, 30% 48%, 30% 87%, 22% 87%, 22% 15%);
-    }
-    .cell.frozen {
-      box-shadow: inset 0 0 0 2px rgba(0,160,255,.38), inset 1px 1px 0 rgba(255,255,255,.92), inset -1px -1px 0 rgba(0,0,0,.2);
-    }
-    .cell.frozen::after {
-      content: '❄';
-      position: absolute;
-      right: 1px;
-      top: -1px;
-      font-size: 9px;
-      color: #0a8cff;
-      text-shadow: 0 0 1px rgba(255,255,255,.5);
-    }
-    .cell.timer-badge::after {
-      content: attr(data-timer);
-      position: absolute;
-      right: 1px;
-      top: 1px;
-      min-width: 12px;
-      height: 12px;
-      padding: 0 2px;
-      border-radius: 999px;
-      background: linear-gradient(180deg, #3a3a3a, #1a1a1a);
-      border: 1px solid rgba(255,255,255,.08);
-      color: #ff5151;
-      font-size: 8px;
-      line-height: 11px;
-      text-align: center;
-      font-weight: 900;
-      box-shadow: 0 0 0 1px rgba(0,0,0,.12);
-    }
-    .cell.bad-pickup::after {
-      content: '';
-      position: absolute;
-      inset: 4px;
-      border-radius: 50%;
-      border: 2px solid rgba(0,110,255,.35);
-    }
-    .num-1 { color: var(--blue); }
-    .num-2 { color: var(--green); }
-    .num-3 { color: var(--red); }
-    .num-4 { color: #000080; }
-    .num-5 { color: #800000; }
-    .num-6 { color: #008080; }
-    .num-7 { color: #111111; }
-    .num-8 { color: #666666; }
-    .toolbar {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px;
-    }
-    .toolset { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .tool-btn, .mini-btn, .select-btn, .zoom-wrap input {
-      border: 1px solid rgba(0,0,0,.22);
-      border-radius: 10px;
-      background: linear-gradient(180deg, #fff, #d6d6d6);
-      box-shadow: var(--shadow-in);
-      color: var(--ink);
-      cursor: pointer;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .tool-btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; min-height: 40px; font-weight: 800; }
-    .tool-btn.active { background: linear-gradient(180deg, #eaf2ff, #c0d7ff); border-color: #75a6ea; }
-    .tool-btn .icon, .mini-btn .icon { display: inline-grid; place-items: center; width: 18px; height: 18px; }
-    .tool-btn svg, .mini-btn svg { width: 18px; height: 18px; display: block; shape-rendering: crispEdges; }
-    .select-btn { min-height: 40px; padding: 0 12px; font-weight: 800; }
-    .tool-info { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; opacity: .85; }
-    .tool-info span {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 9px;
-      border-radius: 999px;
-      background: rgba(255,255,255,.34);
-      border: 1px solid rgba(0,0,0,.08);
-    }
-    .zoom-wrap {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 8px;
-      border-radius: 10px;
-      background: rgba(255,255,255,.34);
-      border: 1px solid rgba(0,0,0,.08);
-      min-height: 40px;
-    }
-    .zoom-wrap label { font-size: 12px; font-weight: 800; white-space: nowrap; }
-    .zoom-wrap input {
-      width: min(30vw, 180px);
-      accent-color: #5f7fd8;
-      box-shadow: none;
-      background: transparent;
-      border: 0;
-    }.footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-  padding: 0 2px;
-  font-size: 12px;
-  opacity: .8;
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Сапёр: Overload</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+html,body { height:100%; }
+body {
+  font-family: "Tahoma","Segoe UI",sans-serif;
+  background:#008080;
+  color:#000;
+  display:flex; flex-direction:column; align-items:center;
+  padding:6px;
+  min-height:100vh;
 }
-.legend { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.legend i {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  display: inline-block;
-  border: 1px solid rgba(0,0,0,.18);
+.window { background:#c0c0c0; padding:4px; border-style:solid; border-width:2px; border-color:#fff #404040 #404040 #fff; max-width:100%; }
+.title-bar {
+  background:linear-gradient(90deg,#000080,#1084d0);
+  color:#fff; font-weight:bold; font-size:14px;
+  padding:3px 6px; margin-bottom:4px; display:flex; align-items:center; gap:6px;
 }
-.board-hint {
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  max-width: min(92vw, 420px);
-  text-align: center;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(255,255,255,.92);
-  border: 1px solid rgba(0,0,0,.16);
-  box-shadow: 0 16px 34px rgba(0,0,0,.18);
-  opacity: 0;
-  transition: opacity .15s ease;
-  pointer-events: none;
-  z-index: 3;
+.title-bar svg { width:16px; height:16px; flex:0 0 auto; }
+.toolbar {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:6px;
+  padding:6px; margin-bottom:4px;
+  border-style:solid; border-width:2px; border-color:#404040 #fff #fff #404040;
 }
-.board-hint.show { opacity: 1; }
-.modals {
-  position: fixed;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(0,0,0,.56);
-  z-index: 50;
+.lcd {
+  background:#000; color:#ff0000; font-family:'Courier New',monospace;
+  font-weight:bold; font-size:22px; letter-spacing:2px;
+  padding:2px 6px; min-width:62px; text-align:right;
+  border-style:solid; border-width:2px; border-color:#404040 #fff #fff #404040;
 }
-.modals.show { display: flex; }
-.modal {
-  width: min(100%, 820px);
-  max-height: min(90dvh, 920px);
-  overflow: auto;
-  background: linear-gradient(180deg, #fff, #e4e4e4);
-  border-radius: 16px;
-  border: 1px solid rgba(0,0,0,.2);
-  box-shadow: 0 30px 80px rgba(0,0,0,.35);
+.smiley-btn {
+  width:36px; height:36px; padding:2px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  border-style:solid; border-width:2px; border-color:#fff #404040 #404040 #fff;
+  background:#c0c0c0;
 }
-.modal header {
-  padding: 16px 18px 10px;
-  border-bottom: 1px solid rgba(0,0,0,.08);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.smiley-btn:active { border-color:#404040 #fff #fff #404040; }
+.smiley-btn svg { width:24px; height:24px; }
+.inventory-bar {
+  display:flex; gap:4px; padding:4px; margin-bottom:4px;
+  border-style:solid; border-width:2px; border-color:#404040 #fff #fff #404040;
+  flex-wrap:wrap;
 }
-.modal header h2 { margin: 0; font-size: 18px; }
-.modal .body { padding: 16px 18px 18px; }
-.modal p { margin: 0 0 12px; line-height: 1.5; }
-.actions { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; margin-top: 14px; }
-.actions .mini-btn { padding: 10px 14px; min-width: 110px; font-weight: 800; }
-.steps { display: grid; gap: 10px; margin: 12px 0; }
-.step-row { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; }
-.dot {
-  width: 18px; height: 18px; margin-top: 4px; border-radius: 50%;
-  border: 2px solid rgba(0,0,0,.18);
-  background: #fff;
+.inv-item {
+  position:relative; width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+  border-style:solid; border-width:2px; border-color:#fff #404040 #404040 #fff;
+  background:#c0c0c0; cursor:pointer; opacity:.35;
 }
-.dot.done { background: #2c86ff; border-color: #2c86ff; }
-.difficulty-list, .wiki-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.difficulty-list .mini-btn, .wiki-tabs .mini-btn { padding: 9px 12px; font-weight: 800; }
-.mini-btn.active { background: linear-gradient(180deg, #eaf2ff, #c0d7ff); border-color: #75a6ea; }
-.grid-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
-.card {
-  padding: 12px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fff, #ededed);
-  border: 1px solid rgba(0,0,0,.14);
-  box-shadow: var(--shadow-in);
+.inv-item.active { opacity:1; }
+.inv-item.selected { border-color:#404040 #fff #fff #404040; background:#a0d0ff; }
+.inv-item svg { width:20px; height:20px; }
+.inv-badge {
+  position:absolute; bottom:-2px; right:-2px; background:#000080; color:#fff;
+  font-size:10px; font-weight:bold; border-radius:6px; padding:0 4px; line-height:14px;
 }
-.card h3 { margin: 0 0 8px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
-.card ul { margin: 0; padding-left: 18px; line-height: 1.45; }
-.wiki-body { display: grid; gap: 10px; }
-.mini-list { display: grid; gap: 8px; }
-.mini-item {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,.1);
-  background: rgba(255,255,255,.62);
+.board-scroll {
+  overflow:auto; max-width:96vw; max-height:70vh;
+  border-style:solid; border-width:3px; border-color:#404040 #fff #fff #404040;
+  -webkit-overflow-scrolling:touch;
+  background:#c0c0c0;
 }
-.mini-item strong { display: inline-flex; align-items: center; gap: 8px; }
-.mini-item svg { width: 16px; height: 16px; }
-.kicker, .small-note { font-size: 12px; opacity: .76; }
-.good { color: #008000; font-weight: 800; }
-.bad { color: #cc0000; font-weight: 800; }
-@media (max-width: 760px) {
-  :root { --cell: 16px; }
-  .hud { grid-template-columns: 1fr auto 1fr; }
-  .lcd .value { min-width: 58px; font-size: 21px; }
-  .toolset, .tool-info { width: 100%; }
-  .toolset { justify-content: space-between; }
-  .tool-btn { flex: 1 1 auto; justify-content: center; }
-  .select-btn { width: 100%; }
-  .grid-cards { grid-template-columns: 1fr; }
-  .footer { flex-direction: column; align-items: flex-start; }
-  .zoom-wrap { width: 100%; justify-content: space-between; }
-  .zoom-wrap input { width: 45%; }
+.board {
+  display:grid;
+  background:#c0c0c0;
+  position:relative;
 }
-
-  </style>
+.board-lock {
+  position:absolute; inset:0;
+  display:none;
+  align-items:center; justify-content:center;
+  background:rgba(192,192,192,.92);
+  z-index:2;
+  font-weight:bold;
+  font-size:14px;
+  text-align:center;
+  padding:12px;
+  pointer-events:none;
+}
+.board.locked .board-lock { display:flex; }
+.cell {
+  width:var(--cs); height:var(--cs);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:bold; position:relative;
+  font-size:calc(var(--cs) * 0.6);
+}
+.cell.hidden {
+  border-style:solid; border-width:2px; border-color:#fff #404040 #404040 #fff;
+  background:#c0c0c0;
+}
+.cell.hidden:active { border-color:#404040 #fff #fff #404040; }
+.cell.opened {
+  border:1px solid #999; background:#bdbdbd;
+}
+.cell.opened.mine-hit { background:#ff4444; }
+.cell.flagged { background:#c0c0c0; }
+.cell.frozen.opened { background:#aee3ff; }
+.cell.burned.opened { background:#ffb380; }
+.cell.svg-only svg { width:70%; height:70%; }
+.timer-badge {
+  position:absolute; top:0; right:0; background:#ff0; color:#000; font-size:9px;
+  font-weight:bold; border-radius:50%; width:14px; height:14px; line-height:14px; text-align:center;
+  border:1px solid #c80; transform:translate(30%,-30%);
+}
+.n1{color:#0000ff;} .n2{color:#008000;} .n3{color:#ff0000;} .n4{color:#000080;}
+.n5{color:#800000;} .n6{color:#008080;} .n7{color:#000;} .n8{color:#808080;}
+.status-bar {
+  margin-top:4px; padding:4px 8px; font-size:13px; text-align:center;
+  border-style:solid; border-width:2px; border-color:#404040 #fff #fff #404040;
+  min-height:18px;
+}
+.modal-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000;
+  align-items:center; justify-content:center; padding:10px;
+}
+.modal-overlay.show { display:flex; }
+.modal-box {
+  background:#c0c0c0; border-style:solid; border-width:2px; border-color:#fff #404040 #404040 #fff;
+  padding:14px; max-width:760px; width:100%; max-height:90vh; overflow:auto;
+}
+.modal-box h2 { margin-bottom:10px; font-size:18px; }
+.modal-box h3 { margin:12px 0 8px; font-size:15px; }
+.diff-grid, .wiki-grid { display:grid; gap:8px; margin-top:10px; }
+.diff-grid { grid-template-columns:repeat(2,1fr); }
+.wiki-grid { grid-template-columns:repeat(2,1fr); }
+@media (min-width:760px){ .wiki-grid { grid-template-columns:repeat(3,1fr); } }
+.diff-btn, .wiki-card, .mini-btn {
+  padding:10px; font-size:13px; cursor:pointer; text-align:left;
+  border-style:solid; border-width:2px; border-color:#fff #404040 #404040 #fff; background:#c0c0c0;
+}
+.diff-btn:active, .wiki-card:active, .mini-btn:active { border-color:#404040 #fff #fff #404040; }
+.diff-btn b, .wiki-card b { display:block; font-size:14px; margin-bottom:2px; }
+.win98-btn {
+  padding:6px 16px; font-size:13px; cursor:pointer; margin-top:10px;
+  border-style:solid; border-width:2px; border-color:#fff #404040 #404040 #fff; background:#c0c0c0;
+}
+.win98-btn:active { border-color:#404040 #fff #fff #404040; }
+.button-row { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:6px; }
+.button-row .win98-btn { margin-top:0; }
+#tutorialOverlay { display:none; }
+#tutorialOverlay.show { display:block; position:fixed; inset:0; z-index:2000; pointer-events:none; }
+.tut-spot {
+  position:absolute; border:3px solid #ffcc00; border-radius:6px;
+  box-shadow:0 0 0 4000px rgba(0,0,0,.55), 0 0 14px #ffcc00;
+  animation:tutpulse 1s infinite alternate; pointer-events:none;
+}
+@keyframes tutpulse { from{box-shadow:0 0 0 4000px rgba(0,0,0,.55),0 0 8px #ffcc00;} to{box-shadow:0 0 0 4000px rgba(0,0,0,.55),0 0 22px #ffcc00;} }
+.tut-tip {
+  position:absolute; background:#fffbe0; border:2px solid #000; border-radius:6px;
+  padding:10px 12px; font-size:13px; max-width:280px; pointer-events:auto;
+  box-shadow:4px 4px 0 rgba(0,0,0,.4);
+}
+.tut-tip .win98-btn { display:inline-block; }
+#tutBoardWrap {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  z-index:1999; pointer-events:auto; display:flex; flex-direction:column; align-items:center;
+}
+.small-note { font-size:12px; line-height:1.35; opacity:.92; }
+.card-list { display:grid; grid-template-columns:repeat(1,1fr); gap:8px; }
+@media (min-width:760px){ .card-list { grid-template-columns:repeat(2,1fr); } }
+.info-line { display:flex; gap:8px; align-items:flex-start; }
+.info-line svg { width:20px; height:20px; flex:0 0 auto; margin-top:1px; }
+.badge { display:inline-block; padding:2px 6px; border:1px solid #222; background:#fff; font-size:11px; margin-right:4px; }
+@media (max-width:480px){
+  .lcd{font-size:18px; min-width:50px;}
+  .title-bar{font-size:12px;}
+  .modal-box{font-size:13px;}
+  .wiki-grid{grid-template-columns:1fr;}
+  .diff-grid{grid-template-columns:1fr;}
+}
+</style>
 </head>
 <body>
-  <div class="app">
-    <div class="titlebar">
-      <div><strong>Minesweeper: Overload Edition</strong> — ретро-сапёр с лишним хаосом</div>
-      <div id="firstSeenText"></div>
-    </div><div class="hud retro">
-  <div class="lcd"><div class="wrap"><div class="label">MINES</div><div class="value" id="minesLeft">000</div></div></div>
-  <div class="face-wrap">
-    <button class="face-btn" id="resetBtn" aria-label="Новая игра" title="Новая игра">
-      <svg viewBox="0 0 24 24" id="faceIcon"><path fill="currentColor" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm-3 6.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm6 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm-4 4.4h2.2c1.8 0 3.2.7 4.3 2l1.5-1.2c-1.4-1.8-3.6-2.8-5.8-2.8s-4.4 1-5.8 2.8l1.5 1.2c1.1-1.3 2.5-2 4.1-2Z"/></svg>
-    </button>
+
+<div id="tutorialOverlay">
+  <div class="tut-spot" id="tutSpot" style="display:none;"></div>
+  <div class="tut-tip" id="tutTip"></div>
+</div>
+<div id="tutBoardWrap"></div>
+
+<div class="modal-overlay" id="difficultyModal">
+  <div class="modal-box">
+    <h2>Выберите сложность</h2>
+    <div class="diff-grid" id="diffGrid"></div>
   </div>
-  <div class="lcd"><div class="wrap"><div class="label">TIME</div><div class="value" id="timeLeft">000</div></div></div>
 </div>
 
-<div class="board-wrap retro" id="boardWrap">
-  <div class="board" id="board"></div>
-  <div class="board-hint" id="hint"></div>
+<div class="modal-overlay" id="resultModal">
+  <div class="modal-box" style="text-align:center;">
+    <h2 id="resultTitle"></h2>
+    <p id="resultText" style="margin:10px 0;"></p>
+    <button class="win98-btn" onclick="closeResultAndShowDiff()">Новая игра</button>
+  </div>
 </div>
 
-<div class="toolbar retro">
-  <div class="toolset">
-    <button class="tool-btn active" data-tool="open" id="toolOpen"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#0000ff" d="M2 8h7V5l5 3-5 3V8H2Z"/></svg></span>Открыть</button>
-    <button class="tool-btn" data-tool="flag" id="toolFlag"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#000000" d="M3 1h1v14H3z"/><path fill="#ff0000" d="M4 2h8l-2 2 2 2H4z"/></svg></span>Флаг</button>
-    <button class="tool-btn" data-tool="defer" id="toolDefer"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#2d6bff" d="M8 1c2.6 0 4.8 2 4.8 4.5 0 2.1-1.4 3.8-3.4 4.4v2l1.3 1.3-1 1L8 12.7l-1.7 1.5-1-1 1.3-1.3v-2C4.6 9.3 3.2 7.6 3.2 5.5 3.2 3 5.4 1 8 1Z"/><rect x="7" y="4" width="2" height="2" fill="#ffd500"/></svg></span>Дефер</button>
-    <button class="tool-btn" data-tool="drone" id="toolDrone"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#a300d6" d="M8 3c1.7 0 3 1.3 3 3v1h2v2h-2v2h-2V9H7v2H5V9H3V7h2V6c0-1.7 1.3-3 3-3Z"/><circle cx="8" cy="7" r="1" fill="#ffffff"/></svg></span>Дрон</button>
-    <button class="tool-btn" data-tool="bomb" id="toolBomb"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#222222" d="M9 1h1v2h-1z"/><path fill="#ff5500" d="M9 3c2 0 3.5 1.5 3.5 3.5S11 10 9 10 5.5 8.5 5.5 6.5 7 3 9 3Z"/><path fill="#000000" d="M12 2l1 1-1 1-1-1z"/></svg></span>Бомба</button>
-    <button class="tool-btn" data-tool="wiki" id="toolWiki"><span class="icon"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#0b5cff" d="M2 1h6c1 0 2 .8 2 2v11H4c-1.1 0-2 .9-2 2V1Z"/><path fill="#ffffff" d="M4 3h4v1H4zm0 3h4v1H4zm0 3h3v1H4z"/></svg></span>Книжечка</button>
-  </div>
-  <div class="tool-info">
-    <span><strong>Ходы:</strong> <b id="moves">0</b></span>
-    <span><strong>Статус:</strong> <b id="statusText">готов</b></span>
-    <div class="zoom-wrap">
-      <label for="zoomSlider">Зум</label>
-      <input id="zoomSlider" type="range" min="80" max="140" value="100" step="5" />
+<div class="modal-overlay" id="wikiModal">
+  <div class="modal-box">
+    <h2>Книжечка</h2>
+    <p class="small-note">Здесь собраны мины, события, предметы и базовые приёмы. Всё, что влияет на поле, объяснено в одном месте.</p>
+    <h3>Управление</h3>
+    <div class="card-list">
+      <div class="wiki-card"><b>Открыть клетку</b>Клик или короткий тап.</div>
+      <div class="wiki-card"><b>Поставить флаг</b>Зажми клетку на телефоне или нажми правой кнопкой мыши.</div>
+      <div class="wiki-card"><b>Предметы</b>Выбери предмет в инвентаре и нажми на нужную клетку.</div>
+      <div class="wiki-card"><b>Первый ход</b>Вокруг первого открытия освобождается безопасная зона примерно 5×5.</div>
     </div>
-    <select class="select-btn" id="difficultySelect" aria-label="Сложность">
-      <option value="easy">Легко</option>
-      <option value="normal" selected>Среднее</option>
-      <option value="hard">Сложно</option>
-      <option value="veryhard">Очень сложно</option>
-      <option value="impossible">Невозможно</option>
-    </select>
+    <h3>Мины</h3>
+    <div class="wiki-grid" id="mineWikiGrid"></div>
+    <h3>События и эффекты</h3>
+    <div class="wiki-grid" id="eventWikiGrid"></div>
+    <h3>Предметы</h3>
+    <div class="wiki-grid" id="itemWikiGrid"></div>
+    <div style="text-align:center;">
+      <button class="win98-btn" onclick="closeWiki()">Закрыть</button>
+    </div>
   </div>
 </div>
 
-<div class="footer">
-  <div class="legend">
-    <span><i style="background:#ececec"></i> открытая клетка</span>
-    <span><i style="background:#c0c0c0"></i> закрытая клетка</span>
-    <span><i style="background:#ffd9b5"></i> таймер включится только после цифры рядом</span>
+<div class="window" id="gameWindow" style="display:none;">
+  <div class="title-bar">
+    <svg viewBox="0 0 24 24" fill="#000"><circle cx="12" cy="13" r="7"/><line x1="12" y1="2" x2="12" y2="6" stroke="#000" stroke-width="2"/></svg>
+    Сапёр: Overload Edition
   </div>
-  <div>Первый клик безопасный. Таймерные мины молчат, пока рядом не откроют число.</div>
+  <div class="toolbar">
+    <div class="lcd" id="mineCounter">000</div>
+    <div class="smiley-btn" id="smileyBtn" onclick="newGameFromSmiley()"></div>
+    <div class="lcd" id="moveCounter">000</div>
+  </div>
+  <div class="inventory-bar" id="inventoryBar"></div>
+  <div class="board-scroll" id="boardScroll">
+    <div class="board locked" id="board">
+      <div class="board-lock" id="boardLock">Нажми на поле, чтобы создать карту.</div>
+    </div>
+  </div>
+  <div class="status-bar" id="statusBar">Готов</div>
+  <div class="button-row">
+    <button class="win98-btn" onclick="toggleFlagMode()" id="flagModeBtn">🚩 Флаг: выкл</button>
+    <button class="win98-btn" onclick="showDifficultyModal()">Сменить сложность</button>
+    <button class="win98-btn" onclick="startTutorial()">Обучение</button>
+    <button class="win98-btn" onclick="showWiki()">Книжечка</button>
+  </div>
 </div>
 
-  </div>  <div class="modals" id="tutorialLayer">
-    <div class="modal" id="tutorialModal">
-      <header>
-        <h2>Обучение</h2>
-        <div class="small-note" id="tutorialMeta"></div>
-      </header>
-      <div class="body">
-        <p id="tutorialText"></p>
-        <div class="steps" id="tutorialSteps"></div>
-        <div class="difficulty-list" id="tutorialDiffs"></div>
-        <div class="actions">
-          <button class="mini-btn" id="tutorialBack">Назад</button>
-          <button class="mini-btn" id="tutorialNext">Дальше</button>
-        </div>
+<script>
+const ICONS = {
+  mine: `<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="6" fill="#1a1a1a"/><line x1="12" y1="3" x2="12" y2="7" stroke="#1a1a1a" stroke-width="2"/><line x1="12" y1="13" x2="16" y2="9" stroke="#1a1a1a" stroke-width="1.5"/><line x1="12" y1="13" x2="8" y2="9" stroke="#1a1a1a" stroke-width="1.5"/><line x1="12" y1="13" x2="6" y2="13" stroke="#1a1a1a" stroke-width="1.5"/><line x1="12" y1="13" x2="18" y2="13" stroke="#1a1a1a" stroke-width="1.5"/><circle cx="9.5" cy="11" r="1.4" fill="#fff"/></svg>`,
+  timer: `<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8" fill="#fff" stroke="#333" stroke-width="2"/><line x1="12" y1="13" x2="12" y2="8" stroke="#333" stroke-width="2"/><line x1="12" y1="13" x2="16" y2="14" stroke="#333" stroke-width="2"/><rect x="9" y="2" width="6" height="2" fill="#333"/></svg>`,
+  fire: `<svg viewBox="0 0 24 24"><path d="M12 2c-1.5 4-5 5.5-5 9.5a5 5 0 0010 0c0-2.5-1.2-3.5-2-4.5.2 2-1 3.2-2 2.2 1-2.2 0-4.7-1-7.2z" fill="#ff5722" stroke="#a83a10" stroke-width="0.6"/></svg>`,
+  ice: `<svg viewBox="0 0 24 24"><g stroke="#03a9f4" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="5" y1="5" x2="19" y2="19"/><line x1="5" y1="19" x2="19" y2="5"/></g></svg>`,
+  electric: `<svg viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="#ffc107" stroke="#b48a00" stroke-width="0.5"/></svg>`,
+  radiation: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2" fill="#222"/><g fill="#ffeb3b" stroke="#222" stroke-width="0.5"><path d="M12 12L12 3a9 9 0 016.2 2.7z"/><path d="M12 12L20 7.5a9 9 0 010 9z"/><path d="M12 12L12 21a9 9 0 01-6.2-2.7z"/></g></svg>`,
+  teleport: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#9c27b0" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="#9c27b0" stroke-width="2"/><circle cx="12" cy="12" r="1.5" fill="#9c27b0"/></svg>`,
+  magnet: `<svg viewBox="0 0 24 24"><path d="M5 3h5v9a2 2 0 004 0V3h5v9a7 7 0 01-14 0z" fill="#e91e63" stroke="#a31444" stroke-width="0.5"/><rect x="5" y="3" width="5" height="3" fill="#fff"/><rect x="14" y="3" width="5" height="3" fill="#fff"/></svg>`,
+  flag: `<svg viewBox="0 0 24 24"><line x1="6" y1="2" x2="6" y2="22" stroke="#000" stroke-width="2"/><path d="M6 3l13 4.5-13 4.5z" fill="#f44336"/><rect x="3" y="21" width="9" height="2" fill="#000"/></svg>`,
+  defer: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#4caf50" stroke-width="2"/><circle cx="12" cy="12" r="5.5" fill="none" stroke="#4caf50" stroke-width="2"/><circle cx="12" cy="12" r="1.8" fill="#4caf50"/></svg>`,
+  shield: `<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 9.5-8 11-4.5-1.5-8-6-8-11V5z" fill="#2196f3" stroke="#0b5ca8" stroke-width="0.5"/><path d="M8 12l3 3 5-5" stroke="#fff" stroke-width="2" fill="none"/></svg>`,
+  drone: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="#607d8b"/><circle cx="4" cy="4" r="2" fill="#607d8b"/><circle cx="20" cy="4" r="2" fill="#607d8b"/><circle cx="4" cy="20" r="2" fill="#607d8b"/><circle cx="20" cy="20" r="2" fill="#607d8b"/><line x1="6" y1="6" x2="9.5" y2="9.5" stroke="#607d8b" stroke-width="2"/><line x1="18" y1="6" x2="14.5" y2="9.5" stroke="#607d8b" stroke-width="2"/><line x1="6" y1="18" x2="9.5" y2="14.5" stroke="#607d8b" stroke-width="2"/><line x1="18" y1="18" x2="14.5" y2="14.5" stroke="#607d8b" stroke-width="2"/></svg>`,
+  safebomb: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="#fff" stroke="#4caf50" stroke-width="2.5"/><path d="M8 12l3 3 5-6" stroke="#4caf50" stroke-width="2" fill="none"/></svg>`,
+  smileyN: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#ffeb3b" stroke="#000" stroke-width="1.5"/><circle cx="8.3" cy="10" r="1.4" fill="#000"/><circle cx="15.7" cy="10" r="1.4" fill="#000"/><path d="M7 14.5a5.5 5.5 0 0010 0" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  smileyW: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#ffeb3b" stroke="#000" stroke-width="1.5"/><circle cx="8.3" cy="9.8" r="1.3" fill="#000"/><circle cx="15.7" cy="9.8" r="1.3" fill="#000"/><path d="M7 14a5.5 5.5 0 0010 0" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  smileyD: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#ffeb3b" stroke="#000" stroke-width="1.5"/><path d="M6 8l4 4M10 8l-4 4M14 8l4 4M18 8l-4 4" stroke="#000" stroke-width="1.5" stroke-linecap="round"/><path d="M7 17a5.5 5.5 0 0110 0" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+};
+function icon(name){ return ICONS[name] || ''; }
+
+const DIFFS = {
+  easy:      {label:'Легко',      size:16, mines:32,  timers:4,  defers:4,  fog:0.04},
+  normal:    {label:'Средне',     size:22, mines:90,  timers:10, defers:8,  fog:0.07},
+  hard:      {label:'Сложно',     size:28, mines:180, timers:16, defers:12, fog:0.10},
+  veryhard:  {label:'Очень сложно', size:34, mines:320, timers:24, defers:18, fog:0.13},
+  impossible:{label:'Невозможно', size:40, mines:500, timers:34, defers:24, fog:0.16},
+};
+
+const SPECIALS = ['fire','ice','electric','radiation','teleport','magnet'];
+const MINE_WIKI = [
+  {key:'normal', title:'Обычная мина', icon:'mine', text:'Взрывается сразу при открытии. Закрывает игру, если у тебя нет щита.'},
+  {key:'timer', title:'Таймерная мина', icon:'timer', text:'После открытия запускает обратный отсчёт. Когда таймер дойдёт до нуля, мина взорвётся.'},
+  {key:'fire', title:'Огненная мина', icon:'fire', text:'Поджигает соседние клетки, может запускать цепную реакцию и открывать опасные зоны.'},
+  {key:'ice', title:'Ледяная мина', icon:'ice', text:'Замораживает соседние клетки на несколько ходов. Замороженную клетку нельзя открыть.'},
+  {key:'electric', title:'Электрическая мина', icon:'electric', text:'Открывает несколько соседних клеток случайным образом. Очень любит ломать осторожные планы.'},
+  {key:'radiation', title:'Радиационная мина', icon:'radiation', text:'Портит цифры вокруг себя. Подсказки рядом с ней могут смещаться на 1.'},
+  {key:'teleport', title:'Телепорт-мина', icon:'teleport', text:'Меняет местами соседние клетки с другими безопасными клетками поля.'},
+  {key:'magnet', title:'Магнитная мина', icon:'magnet', text:'Сдвигает мины рядом с собой, меняя привычную картину вокруг.'},
+  {key:'mimic', title:'Мимик', icon:'mine', text:'Маскируется под обычную угрозу и ведёт себя как взрывной обманщик.'},
+];
+const EVENT_WIKI = [
+  {title:'Первое открытие', icon:'mine', text:'На первом клике вокруг точки появляется безопасная зона примерно 5×5. Это помогает не ловить мгновенный проигрыш.'},
+  {title:'Флаг', icon:'flag', text:'Флаг нужен, чтобы пометить подозрительную клетку. Он не открывает клетку, а только отмечает её.'},
+  {title:'Заморозка', icon:'ice', text:'Если клетка заморожена, открыть её нельзя до окончания эффекта.'},
+  {title:'Скрытый туман', icon:'teleport', text:'Часть пустых клеток может быть покрыта туманом. Это только оформление, не меняющее логику.'},
+  {title:'Цепные эффекты', icon:'fire', text:'Некоторые мины умеют запускать другие эффекты, поэтому одна ошибка может привести к снежному кому.'},
+  {title:'Щит', icon:'shield', text:'Щит срабатывает автоматически и спасает от одного взрыва.'},
+];
+const ITEM_WIKI = [
+  {title:'Дефер', icon:'defer', text:'Нужен для обезвреживания активной таймерной мины. Сначала выбери предмет, потом нажми на нужную клетку.'},
+  {title:'Щит', icon:'shield', text:'Не выбирается вручную. Срабатывает сам, если тебя вот-вот разорвёт взрывом.'},
+  {title:'Дрон', icon:'drone', text:'Открывает несколько случайных безопасных клеток. Используется сразу при нажатии на иконку.'},
+  {title:'Безопасная бомба', icon:'safebomb', text:'Открывает выбранную клетку и её соседей, не активируя мины внутри зоны.'},
+];
+
+let G = null;
+let flagMode = false;
+
+function newState(diffKey){
+  const cfg = DIFFS[diffKey];
+  return {
+    diff: diffKey,
+    cfg,
+    size: cfg.size,
+    board: null,
+    revealed: null,
+    flagged: null,
+    timers: {},
+    frozen: {},
+    burned: new Set(),
+    inventory: {defer:0, shield:0, drone:0, safebomb:0},
+    selectedItem: null,
+    moves: 0,
+    cellsOpened: 0,
+    firstClickDone: false,
+    over: false,
+    won: false,
+    boomCell: null,
+    boardReady: false,
+    radiationSeed: Math.random()*999999|0,
+  };
+}
+
+function generateBoard(state){
+  const {size, cfg} = state;
+  const board = Array.from({length:size},()=>Array.from({length:size},()=>({type:'empty'})));
+
+  let placed = 0, timersPlaced = 0;
+  while(placed < cfg.mines){
+    const x = Math.random()*size|0, y = Math.random()*size|0;
+    if(board[x][y].type !== 'empty') continue;
+    let mineType = 'normal';
+    if(timersPlaced < cfg.timers && Math.random() < 0.26){
+      mineType = 'timer'; timersPlaced++;
+    } else if(Math.random() < 0.13){
+      mineType = SPECIALS[Math.random()*SPECIALS.length|0];
+    } else if(Math.random() < 0.07){
+      mineType = 'mimic';
+    }
+    board[x][y] = {type:'mine', mineType};
+    placed++;
+  }
+
+  let defersPlaced = 0;
+  while(defersPlaced < cfg.defers){
+    const x = Math.random()*size|0, y = Math.random()*size|0;
+    if(board[x][y].type !== 'empty') continue;
+    board[x][y] = {type:'defer'};
+    defersPlaced++;
+  }
+
+  for(let x=0;x<size;x++) for(let y=0;y<size;y++){
+    if(board[x][y].type==='empty' && Math.random()<cfg.fog) board[x][y].foggy = true;
+  }
+
+  state.board = board;
+  state.revealed = Array.from({length:size},()=>Array(size).fill(false));
+  state.flagged = Array.from({length:size},()=>Array(size).fill(false));
+  state.boardReady = true;
+}
+
+function neighbors(size,x,y){
+  const r=[];
+  for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){
+    if(dx===0&&dy===0) continue;
+    const nx=x+dx, ny=y+dy;
+    if(nx>=0&&ny>=0&&nx<size&&ny<size) r.push([nx,ny]);
+  }
+  return r;
+}
+
+function countAdj(state,x,y){
+  let c=0;
+  for(const [nx,ny] of neighbors(state.size,x,y)) if(state.board[nx][ny].type==='mine') c++;
+  return c;
+}
+
+function moveMineAway(state, fromX, fromY, avoidX, avoidY, radius){
+  const size = state.size;
+  let placed = false, tries = 0;
+  while(!placed && tries < 5000){
+    tries++;
+    const x = Math.random()*size|0, y = Math.random()*size|0;
+    const dist = Math.max(Math.abs(x-avoidX), Math.abs(y-avoidY));
+    if(dist <= radius) continue;
+    if(state.board[x][y].type === 'empty'){
+      const fog = state.board[x][y].foggy;
+      state.board[x][y] = {type:'mine', mineType: state.board[fromX][fromY].mineType, foggy:fog};
+      placed = true;
+    }
+  }
+  const fog = state.board[fromX][fromY].foggy;
+  state.board[fromX][fromY] = {type:'empty', foggy:fog};
+}
+
+function ensureSafeFirstClick(state, cx, cy){
+  const radius = 2;
+  const danger = [];
+  for(let dx=-radius;dx<=radius;dx++) for(let dy=-radius;dy<=radius;dy++){
+    const nx=cx+dx, ny=cy+dy;
+    if(nx<0||ny<0||nx>=state.size||ny>=state.size) continue;
+    if(state.board[nx][ny].type==='mine') danger.push([nx,ny]);
+  }
+  for(const [mx,my] of danger) moveMineAway(state, mx, my, cx, cy, radius);
+}
+
+function revealFirstArea(state, cx, cy){
+  const radius = 2;
+  const floodSeeds = [];
+  for(let dx=-radius;dx<=radius;dx++) for(let dy=-radius;dy<=radius;dy++){
+    const x=cx+dx, y=cy+dy;
+    if(x<0||y<0||x>=state.size||y>=state.size) continue;
+    if(state.flagged[x][y] || state.revealed[x][y]) continue;
+    const cell = state.board[x][y];
+    state.revealed[x][y] = true;
+    if(cell.type === 'defer') state.inventory.defer++;
+    state.cellsOpened++;
+    if(cell.type === 'empty' && countAdj(state,x,y)===0) floodSeeds.push([x,y]);
+  }
+  for(const [x,y] of floodSeeds) floodFill(state,x,y);
+}
+
+function openCell(state,x,y, fromChain=false){
+  if(state.over||state.won) return;
+  if(!state.boardReady) return;
+  if(state.flagged[x][y]) return;
+  if(state.revealed[x][y]) return;
+  const freezeKey = `${x}-${y}`;
+  if((state.frozen[freezeKey]||0) > 0) { setStatus('Эта клетка заморожена.'); return; }
+
+  if(!state.firstClickDone){
+    ensureSafeFirstClick(state,x,y);
+    state.firstClickDone = true;
+    revealFirstArea(state,x,y);
+    state.moves++;
+    decrementTimers(state);
+    checkWin(state);
+    return;
+  }
+
+  if(!fromChain) state.moves++;
+
+  const cell = state.board[x][y];
+  state.revealed[x][y] = true;
+
+  if(cell.type==='defer'){
+    state.inventory.defer++;
+    state.cellsOpened++;
+    setStatus('Найден Дефер. Его можно использовать против таймерных мин.');
+  } else if(cell.type==='mine'){
+    handleMineOpen(state,x,y,cell.mineType);
+  } else {
+    state.cellsOpened++;
+    if(countAdj(state,x,y)===0) floodFill(state,x,y);
+  }
+
+  if(!fromChain){
+    decrementTimers(state);
+    checkWin(state);
+  }
+}
+
+function floodFill(state,sx,sy){
+  const stack=[[sx,sy]];
+  while(stack.length){
+    const [x,y]=stack.pop();
+    for(const [nx,ny] of neighbors(state.size,x,y)){
+      if(state.revealed[nx][ny]||state.flagged[nx][ny]) continue;
+      if((state.frozen[`${nx}-${ny}`]||0) > 0) continue;
+      const c = state.board[nx][ny];
+      if(c.type==='mine') continue;
+      state.revealed[nx][ny]=true;
+      if(c.type==='defer'){ state.inventory.defer++; state.cellsOpened++; continue; }
+      state.cellsOpened++;
+      if(c.type==='empty' && countAdj(state,nx,ny)===0) stack.push([nx,ny]);
+    }
+  }
+}
+
+function handleMineOpen(state,x,y,mineType){
+  switch(mineType){
+    case 'normal':
+    case 'mimic':
+      triggerExplosion(state,x,y);
+      break;
+    case 'timer':
+      state.timers[`${x}-${y}`] = 3 + (Math.random()*2|0);
+      setStatus('Таймерная мина активирована. Найди Дефер, чтобы обезвредить её.');
+      break;
+    case 'fire':
+      igniteAdjacent(state,x,y);
+      break;
+    case 'ice':
+      freezeAdjacent(state,x,y);
+      break;
+    case 'electric':
+      randomOpenAdjacent(state,x,y);
+      break;
+    case 'radiation':
+      setStatus('Радиация искажает числа рядом с собой.');
+      break;
+    case 'teleport':
+      teleportAdjacent(state,x,y);
+      break;
+    case 'magnet':
+      magnetShift(state,x,y);
+      break;
+  }
+}
+
+function triggerExplosion(state,x,y){
+  if(state.inventory.shield > 0){
+    state.inventory.shield--;
+    state.flagged[x][y] = true;
+    setStatus('Щит поглотил взрыв.');
+    return;
+  }
+  state.over = true;
+  state.won = false;
+  state.boomCell = [x,y];
+}
+
+function igniteAdjacent(state,x,y){
+  for(const [nx,ny] of neighbors(state.size,x,y)){
+    state.burned.add(`${nx}-${ny}`);
+    if(!state.revealed[nx][ny] && !state.flagged[nx][ny]){
+      const c = state.board[nx][ny];
+      if(c.type==='mine'){
+        state.revealed[nx][ny]=true;
+        handleMineOpen(state,nx,ny,c.mineType);
+      } else {
+        openCell(state,nx,ny,true);
+      }
+    }
+  }
+  setStatus('Огонь распространяется по соседним клеткам.');
+}
+
+function freezeAdjacent(state,x,y){
+  for(const [nx,ny] of neighbors(state.size,x,y)) state.frozen[`${nx}-${ny}`] = 2;
+  setStatus('Соседние клетки заморожены на два хода.');
+}
+
+function randomOpenAdjacent(state,x,y){
+  const cands = neighbors(state.size,x,y).filter(([nx,ny])=>!state.revealed[nx][ny] && !state.flagged[nx][ny]);
+  for(let i=0;i<Math.min(3,cands.length);i++){
+    const idx = Math.random()*cands.length|0;
+    const [nx,ny] = cands.splice(idx,1)[0];
+    if(state.board[nx][ny].type==='mine'){
+      state.revealed[nx][ny]=true;
+      handleMineOpen(state,nx,ny,state.board[nx][ny].mineType);
+    } else {
+      openCell(state,nx,ny,true);
+    }
+  }
+  setStatus('Электрический разряд открыл несколько соседних клеток.');
+}
+
+function teleportAdjacent(state,x,y){
+  const size=state.size;
+  for(const [nx,ny] of neighbors(size,x,y)){
+    if(state.revealed[nx][ny]) continue;
+    let tx,ty,tries=0;
+    do{ tx=Math.random()*size|0; ty=Math.random()*size|0; tries++; }
+    while((state.revealed[tx][ty]) && tries<50);
+    const tmp = state.board[nx][ny];
+    state.board[nx][ny] = state.board[tx][ty];
+    state.board[tx][ty] = tmp;
+  }
+  setStatus('Телепорт перемешал соседние клетки.');
+}
+
+function magnetShift(state,x,y){
+  const size=state.size;
+  const mines = neighbors(size,x,y).filter(([nx,ny])=>state.board[nx][ny].type==='mine');
+  for(const [mx,my] of mines){
+    const dirs=[[0,1],[0,-1],[1,0],[-1,0]];
+    const [dx,dy]=dirs[Math.random()*4|0];
+    const nx=mx+dx, ny=my+dy;
+    if(nx>=0&&ny>=0&&nx<size&&ny<size && !state.revealed[nx][ny]){
+      const tmp=state.board[nx][ny];
+      state.board[nx][ny]=state.board[mx][my];
+      state.board[mx][my]=tmp;
+    }
+  }
+  setStatus('Магнит сдвинул соседние мины.');
+}
+
+function decrementTimers(state){
+  for(const key of Object.keys(state.timers)){
+    state.timers[key]--;
+    if(state.timers[key]<=0){
+      const [x,y]=key.split('-').map(Number);
+      delete state.timers[key];
+      if(!state.flagged[x][y]) triggerExplosion(state,x,y);
+    }
+  }
+  for(const key of Object.keys(state.frozen)){
+    state.frozen[key]--;
+    if(state.frozen[key]<=0) delete state.frozen[key];
+  }
+}
+
+function checkWin(state){
+  if(state.over) return;
+  const size=state.size;
+  let mineCount=0, opened=0;
+  for(let x=0;x<size;x++) for(let y=0;y<size;y++){
+    if(state.board[x][y].type==='mine') mineCount++;
+    if(state.revealed[x][y]) opened++;
+  }
+  if(opened >= size*size - mineCount){
+    state.over=true; state.won=true;
+  }
+}
+
+function useItemOnCell(state,item,x,y){
+  if(item==='defer'){
+    const key=`${x}-${y}`;
+    if(state.revealed[x][y] && state.board[x][y].type==='mine' && state.board[x][y].mineType==='timer' && state.timers[key]!==undefined){
+      delete state.timers[key];
+      state.flagged[x][y]=true;
+      state.inventory.defer--;
+      setStatus('Таймерная мина обезврежена.');
+    } else {
+      setStatus('Здесь нет активной таймерной мины.');
+    }
+  } else if(item==='safebomb'){
+    if(state.revealed[x][y]) { setStatus('Клетка уже открыта.'); return; }
+    state.inventory.safebomb--;
+    for(const [nx,ny] of [[x,y],...neighbors(state.size,x,y)]){
+      if(state.revealed[nx][ny]) continue;
+      const c=state.board[nx][ny];
+      if(c.type==='mine'){
+        state.board[nx][ny]={type:'empty', foggy:c.foggy};
+        state.revealed[nx][ny]=true;
+        state.cellsOpened++;
+      } else {
+        openCell(state,nx,ny,true);
+      }
+    }
+    setStatus('Безопасная бомба открыла область вокруг выбранной клетки.');
+    checkWin(state);
+  }
+  state.selectedItem=null;
+}
+
+function useDrone(state){
+  if(state.inventory.drone<=0) return;
+  const size=state.size;
+  const cands=[];
+  for(let x=0;x<size;x++) for(let y=0;y<size;y++){
+    if(!state.revealed[x][y] && !state.flagged[x][y] && state.board[x][y].type!=='mine') cands.push([x,y]);
+  }
+  state.inventory.drone--;
+  for(let i=0;i<5 && cands.length;i++){
+    const idx=Math.random()*cands.length|0;
+    const [x,y]=cands.splice(idx,1)[0];
+    openCell(state,x,y,true);
+  }
+  setStatus('Дрон открыл несколько безопасных клеток.');
+  checkWin(state);
+  render();
+}
+
+function cellSizePx(){
+  const size = G ? G.size : 16;
+  const avail = Math.min(window.innerWidth-24, window.innerHeight*0.62);
+  let cs = Math.floor(avail/size);
+  return Math.max(10, Math.min(26, cs));
+}
+
+function getCellEl(x,y){
+  return document.getElementById('board').children[x*(G ? G.size : 1)+y];
+}
+
+function render(){
+  if(!G) return;
+  const boardEl=document.getElementById('board');
+  const cs = cellSizePx();
+  boardEl.style.setProperty('--cs',cs+'px');
+  boardEl.style.gridTemplateColumns=`repeat(${G.size},var(--cs))`;
+  boardEl.classList.toggle('locked', !G.boardReady);
+  document.getElementById('boardLock').textContent = G.boardReady ? '' : 'Нажми на поле, чтобы создать карту.';
+
+  const expectedCells = G.size * G.size;
+  const hasCells = boardEl.children.length >= expectedCells + 1;
+  if(!hasCells){
+    boardEl.innerHTML='<div class="board-lock" id="boardLock">Нажми на поле, чтобы создать карту.</div>';
+    for(let x=0;x<G.size;x++) for(let y=0;y<G.size;y++){
+      const d=document.createElement('div');
+      d.className='cell hidden';
+      d.dataset.x=x; d.dataset.y=y;
+      attachCellEvents(d,x,y);
+      boardEl.appendChild(d);
+    }
+  }
+
+  if(G.boardReady){
+    for(let x=0;x<G.size;x++) for(let y=0;y<G.size;y++) updateCell(x,y);
+  } else {
+    for(let i=1;i<boardEl.children.length;i++){
+      const el = boardEl.children[i];
+      if(el.classList.contains('board-lock')) continue;
+      el.className='cell hidden';
+      el.innerHTML='';
+    }
+  }
+  updateUI();
+}
+
+function radiationShiftedNumber(state, x, y, base){
+  let hash = (x*73856093) ^ (y*19349663) ^ state.radiationSeed;
+  hash = (hash >>> 0);
+  const adjust = (hash % 3) - 1;
+  return Math.max(0, Math.min(8, base + adjust));
+}
+
+function hasRadiationNeighbor(state,x,y){
+  for(const [nx,ny] of neighbors(state.size,x,y)){
+    const c=state.board[nx][ny];
+    if(c.type==='mine' && c.mineType==='radiation' && state.revealed[nx][ny]) return true;
+  }
+  return false;
+}
+
+function updateCell(x,y){
+  const el=document.getElementById('board').children[x*G.size+y+1];
+  if(!el) return;
+  const revealed=G.revealed[x][y], flagged=G.flagged[x][y], data=G.board[x][y];
+  el.innerHTML='';
+  el.className='cell';
+  const key=`${x}-${y}`;
+
+  if(flagged){
+    el.classList.add('hidden','flagged');
+    el.innerHTML=icon('flag');
+    return;
+  }
+  if(!revealed){
+    el.classList.add('hidden');
+    return;
+  }
+  el.classList.add('opened');
+  if((G.frozen[key]||0) > 0) el.classList.add('frozen');
+  if(G.burned.has(key)) el.classList.add('burned');
+
+  if(data.type==='mine'){
+    if(G.boomCell && G.boomCell[0]===x && G.boomCell[1]===y) el.classList.add('mine-hit');
+    if(data.mineType==='timer'){
+      el.innerHTML=icon('timer');
+      if(G.timers[key]!==undefined){
+        const b=document.createElement('div');
+        b.className='timer-badge';
+        b.textContent=G.timers[key];
+        el.appendChild(b);
+      }
+    } else if(data.mineType==='fire'){ el.innerHTML=icon('fire'); }
+    else if(data.mineType==='ice'){ el.innerHTML=icon('ice'); }
+    else if(data.mineType==='electric'){ el.innerHTML=icon('electric'); }
+    else if(data.mineType==='radiation'){ el.innerHTML=icon('radiation'); }
+    else if(data.mineType==='teleport'){ el.innerHTML=icon('teleport'); }
+    else if(data.mineType==='magnet'){ el.innerHTML=icon('magnet'); }
+    else { el.innerHTML=icon('mine'); }
+  } else if(data.type==='defer'){
+    el.innerHTML=icon('defer');
+  } else {
+    let n=countAdj(G,x,y);
+    if(n>0 && hasRadiationNeighbor(G,x,y)) n = radiationShiftedNumber(G,x,y,n);
+    if(n>0){
+      el.textContent=n;
+      el.classList.add('n'+Math.min(n,8));
+    }
+  }
+}
+
+function updateUI(){
+  document.getElementById('moveCounter').textContent=String(G.moves).padStart(3,'0');
+  let mineCount=0;
+  for(let x=0;x<G.size;x++) for(let y=0;y<G.size;y++) if(G.board && G.board[x][y].type==='mine' && !G.flagged[x][y]) mineCount++;
+  const mineDisplay = G.boardReady ? mineCount : G.cfg.mines;
+  document.getElementById('mineCounter').textContent=String(Math.max(0,mineDisplay)).padStart(3,'0');
+
+  const smiley=document.getElementById('smileyBtn');
+  smiley.innerHTML = G.over ? (G.won ? icon('smileyW') : icon('smileyD')) : icon('smileyN');
+
+  renderInventory();
+
+  if(G.over){
+    setTimeout(()=>showResult(G.won),250);
+  }
+}
+
+function renderInventory(){
+  const bar=document.getElementById('inventoryBar');
+  bar.innerHTML='';
+  const items=[
+    {key:'defer',icon:'defer',name:'Дефер'},
+    {key:'shield',icon:'shield',name:'Щит'},
+    {key:'drone',icon:'drone',name:'Дрон'},
+    {key:'safebomb',icon:'safebomb',name:'Безопасная бомба'},
+  ];
+  items.forEach(it=>{
+    const cnt=G.inventory[it.key]||0;
+    const div=document.createElement('div');
+    div.className='inv-item'+(cnt>0?' active':'')+(G.selectedItem===it.key?' selected':'');
+    div.innerHTML=icon(it.icon) + (cnt>0?`<div class="inv-badge">${cnt}</div>`:'');
+    div.title=it.name;
+    div.onclick=()=>{
+      if(cnt<=0) return;
+      if(it.key==='shield') { setStatus('Щит срабатывает автоматически при взрыве.'); return; }
+      if(it.key==='drone'){ useDrone(G); return; }
+      G.selectedItem = (G.selectedItem===it.key) ? null : it.key;
+      flagMode = false;
+      updateFlagButton();
+      setStatus(G.selectedItem ? `Выбран предмет: ${it.name}. Нажми на нужную клетку.` : 'Готово.');
+      renderInventory();
+    };
+    bar.appendChild(div);
+  });
+  updateFlagButton();
+}
+
+function setStatus(msg){
+  document.getElementById('statusBar').textContent=msg;
+}
+
+function attachCellEvents(el,x,y){
+  el.addEventListener('click', ()=>doTap(x,y));
+  el.addEventListener('touchend',(e)=>{ e.preventDefault(); doTap(x,y); });
+  el.addEventListener('contextmenu',(e)=>{ e.preventDefault(); doFlag(x,y); });
+}
+
+function doTap(x,y){
+  if(G.over||G.won) return;
+  if(!G.boardReady){
+    generateBoard(G);
+  }
+  if(flagMode){
+    doFlag(x,y);
+    return;
+  }
+  if(G.selectedItem){
+    useItemOnCell(G,G.selectedItem,x,y);
+    render();
+    return;
+  }
+  if(G.flagged[x][y]) return;
+  openCell(G,x,y);
+  render();
+}
+
+function doFlag(x,y){
+  if(G.over||G.won) return;
+  if(!G.boardReady) return;
+  if(G.revealed[x][y]) return;
+  G.flagged[x][y]=!G.flagged[x][y];
+  render();
+}
+
+function showDifficultyModal(){
+  const grid=document.getElementById('diffGrid');
+  grid.innerHTML='';
+  Object.entries(DIFFS).forEach(([key,cfg])=>{
+    const b=document.createElement('div');
+    b.className='diff-btn';
+    b.innerHTML=`<b>${cfg.label}</b>Поле: ${cfg.size}×${cfg.size}<br>Мин: ${cfg.mines}, таймерных: ${cfg.timers}`;
+    b.onclick=()=>{ document.getElementById('difficultyModal').classList.remove('show'); startGame(key); };
+    grid.appendChild(b);
+  });
+  document.getElementById('difficultyModal').classList.add('show');
+}
+
+function startGame(diffKey){
+  G=newState(diffKey);
+  flagMode = false;
+  document.getElementById('gameWindow').style.display='block';
+  document.getElementById('resultModal').classList.remove('show');
+  document.getElementById('wikiModal').classList.remove('show');
+  document.getElementById('tutorialOverlay').classList.remove('show');
+  document.getElementById('tutBoardWrap').innerHTML='';
+  setStatus('Нажми на поле, чтобы создать карту.');
+  updateFlagButton();
+  render();
+}
+
+function newGameFromSmiley(){
+  if(G) startGame(G.diff);
+}
+
+function toggleFlagMode(){
+  flagMode = !flagMode;
+  if(G) G.selectedItem = null;
+  updateFlagButton();
+  if(G) render();
+  setStatus(flagMode ? 'Режим флага включён. Нажимай на клетки, чтобы ставить и снимать флаги.' : 'Режим флага выключен.');
+}
+
+function updateFlagButton(){
+  const btn = document.getElementById('flagModeBtn');
+  if(btn) btn.textContent = flagMode ? '🚩 Флаг: вкл' : '🚩 Флаг: выкл';
+}
+
+function showResult(won){
+  document.getElementById('resultTitle').textContent = won ? 'Победа' : 'Поражение';
+  document.getElementById('resultText').textContent = won
+    ? `Поле очищено за ${G.moves} ходов.`
+    : 'Ты подорвался. Попробуй ещё раз.';
+  document.getElementById('resultModal').classList.add('show');
+}
+function closeResultAndShowDiff(){
+  document.getElementById('resultModal').classList.remove('show');
+  showDifficultyModal();
+}
+
+function showWiki(){
+  fillWiki();
+  document.getElementById('wikiModal').classList.add('show');
+}
+function closeWiki(){
+  document.getElementById('wikiModal').classList.remove('show');
+}
+function fillWiki(){
+  const mineGrid = document.getElementById('mineWikiGrid');
+  const eventGrid = document.getElementById('eventWikiGrid');
+  const itemGrid = document.getElementById('itemWikiGrid');
+  mineGrid.innerHTML = MINE_WIKI.map(x => wikiCardHTML(x)).join('');
+  eventGrid.innerHTML = EVENT_WIKI.map(x => wikiCardHTML(x)).join('');
+  itemGrid.innerHTML = ITEM_WIKI.map(x => wikiCardHTML(x)).join('');
+}
+function wikiCardHTML(data){
+  return `
+    <div class="wiki-card">
+      <div class="info-line">
+        <div>${icon(data.icon)}</div>
+        <div><b>${data.title}</b>${data.text}</div>
       </div>
-    </div>
-  </div>  <div class="modals" id="wikiLayer">
-    <div class="modal" id="wikiModal">
-      <header>
-        <h2>Книжечка</h2>
-        <div class="small-note">подробно про всё, что шевелится и взрывается</div>
-      </header>
-      <div class="body">
-        <div class="wiki-tabs" id="wikiTabs"></div>
-        <div class="wiki-body" id="wikiBody"></div>
-        <div class="actions"><button class="mini-btn" id="wikiClose">Закрыть</button></div>
-      </div>
-    </div>
-  </div>  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
-    <symbol id="i-mine" viewBox="0 0 16 16"><path fill="#202020" d="M8 1l1.4 3L13 5l-3.6 1.7L8 10 6.6 6.7 3 5l3.6-1L8 1Z"/><path fill="#ff0000" d="M8 4.5 8.7 6l1.5.7-1.5.7L8 9 7.3 7.4 5.8 6.7 7.3 6z"/></symbol>
-    <symbol id="i-clock" viewBox="0 0 16 16"><path fill="#ff9900" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm1 3H7v4.8l3.2 1.9.8-1.3L9 8.6V4Z"/></symbol>
-    <symbol id="i-fire" viewBox="0 0 16 16"><path fill="#ff6a00" d="M9 1c.8 1.4.8 2.8.3 4 1.1-.2 2-.8 2.6-2 .9 1.5 1.5 2.8 1.5 4.5A4.8 4.8 0 0 1 8 12.3C5.4 12.3 3.3 10.4 3.3 8c0-1.7.7-3.2 2.2-4.8.1 1.4.7 2.4 1.7 3 .2-2 1.1-3.6 2.8-5.2Z"/><path fill="#ff2b2b" d="M8 5.2c.7.7 1 1.7.9 2.9-.1.8-.6 1.5-1.3 2-.5-.4-.8-1-.9-1.6-.1-1.1.4-2.2 1.3-3.3Z"/></symbol>
-    <symbol id="i-ice" viewBox="0 0 16 16"><path fill="#67c8ff" d="M8 1 6.6 4.4 3 3.5 4.6 6.8 1 8l3.6 1.2-1.6 3.3 3.6-.9L8 15l1.4-3.4 3.6.9-1.6-3.3L15 8l-3.6-1.2L13 3.5l-3.6.9L8 1Z"/><path fill="#fff" opacity=".9" d="M8 3.6 8.7 5.5l1.9.7-1.9.7L8 8.8 7.3 6.9l-1.9-.7 1.9-.7L8 3.6Z"/></symbol>
-    <symbol id="i-electric" viewBox="0 0 16 16"><path fill="#ffd500" d="M10 1 5 8h3l-.5 7L12 8H9.1L10 1Z"/><path fill="#2d66ff" d="M8.2 3.2 7 7h2l-.5 2.6L10.4 6H8.3l-.1-2.8Z"/></symbol>
-    <symbol id="i-radiation" viewBox="0 0 16 16"><path fill="#3cab1e" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 2.4A4.6 4.6 0 0 0 4.1 10l2.1-1.2a2.2 2.2 0 0 1 3.8 0l2.1 1.2A4.6 4.6 0 0 0 8 3.4Z"/><circle cx="8" cy="8" r="1" fill="#202020"/></symbol>
-    <symbol id="i-teleport" viewBox="0 0 16 16"><path fill="#a64cff" d="M8 1 5 4h2v3H4L1 10l3 3h3V10h2v2l3-3-3-3V1Z"/><path fill="#ff9a3d" d="M8 3 9.7 4.8V7H8V3Z"/></symbol>
-    <symbol id="i-magnet" viewBox="0 0 16 16"><path fill="#00a6a6" d="M4 1h3v5H4V1Zm5 0h3v5H9V1ZM4 6h3v2c0 1.7 1.3 3 3 3s3-1.3 3-3V6h3v2a6 6 0 0 1-6 6 6 6 0 0 1-6-6V6Z"/><path fill="#ff5555" d="M7 2h2v2H7V2Zm5 0h2v2h-2V2Z"/></symbol>
-    <symbol id="i-defer" viewBox="0 0 16 16"><path fill="#2d6bff" d="M8 1a7 7 0 0 1 0 14A7 7 0 0 1 8 1Zm0 2A5 5 0 1 0 8 13a5 5 0 0 0 0-10Z"/><rect x="7" y="4" width="2" height="2" fill="#ffd500"/><path fill="#2d6bff" d="M8 4v2"/></symbol>
-    <symbol id="i-shield" viewBox="0 0 16 16"><path fill="#1b8f3a" d="M8 1l5 2.2V7c0 3.6-2.2 6-5 7-2.8-1-5-3.4-5-7V3.2L8 1Z"/><path fill="#fff" opacity=".9" d="M8 3 11.5 4.5V7c0 2.6-1.5 4.4-3.5 5.2C6 11.4 4.5 9.6 4.5 7V4.5L8 3Z"/></symbol>
-    <symbol id="i-drone" viewBox="0 0 16 16"><path fill="#a300d6" d="M8 3c1.7 0 3 1.3 3 3v1h2v2h-2v2H9V9H7v2H5V9H3V7h2V6c0-1.7 1.3-3 3-3Z"/><circle cx="8" cy="7" r="1" fill="#fff"/></symbol>
-    <symbol id="i-bomb" viewBox="0 0 16 16"><path fill="#222" d="M9 1h1v2H9z"/><path fill="#ff5500" d="M9 3c2 0 3.5 1.5 3.5 3.5S11 10 9 10 5.5 8.5 5.5 6.5 7 3 9 3Z"/><path fill="#000" d="M11 2.2 12.2 3.4 11 4.6 9.8 3.4 11 2.2Z"/></symbol>
-    <symbol id="i-wiki" viewBox="0 0 16 16"><path fill="#0b5cff" d="M2 1h6c1.1 0 2 .9 2 2v11H4c-1.1 0-2 .9-2 2V1Z"/><path fill="#fff" d="M4 3h4v1H4zm0 3h4v1H4zm0 3h3v1H4z"/></symbol>
-  </svg>  <script>
-    (() => {
-      const board = document.getElementById('board');
-      const boardWrap = document.getElementById('boardWrap');
-      const hint = document.getElementById('hint');
-      const minesLeftEl = document.getElementById('minesLeft');
-      const timeLeftEl = document.getElementById('timeLeft');
-      const movesEl = document.getElementById('moves');
-      const statusText = document.getElementById('statusText');
-      const resetBtn = document.getElementById('resetBtn');
-      const faceIcon = document.getElementById('faceIcon');
-      const toolButtons = [...document.querySelectorAll('[data-tool]')];
-      const difficultySelect = document.getElementById('difficultySelect');
-      const zoomSlider = document.getElementById('zoomSlider');
-      const tutorialLayer = document.getElementById('tutorialLayer');
-      const tutorialMeta = document.getElementById('tutorialMeta');
-      const tutorialText = document.getElementById('tutorialText');
-      const tutorialSteps = document.getElementById('tutorialSteps');
-      const tutorialDiffs = document.getElementById('tutorialDiffs');
-      const tutorialBack = document.getElementById('tutorialBack');
-      const tutorialNext = document.getElementById('tutorialNext');
-      const wikiLayer = document.getElementById('wikiLayer');
-      const wikiTabs = document.getElementById('wikiTabs');
-      const wikiBody = document.getElementById('wikiBody');
-      const wikiClose = document.getElementById('wikiClose');
-      const firstSeenText = document.getElementById('firstSeenText');
+    </div>`;
+}
 
-      const LS_FIRST = 'overload_first_seen';
-      const LS_TUTORIAL = 'overload_tutorial_seen';
-      const LS_ZOOM = 'overload_zoom';
+window.addEventListener('resize',()=>{ if(G) render(); if(document.getElementById('tutorialOverlay').classList.contains('show')) showTutStep(); });
 
-      const DIFFS = {
-        easy: { label: 'Легко', w: 20, h: 20, mines: 0.11, eventEvery: 8, eventChance: 0.11 },
-        normal: { label: 'Среднее', w: 24, h: 24, mines: 0.13, eventEvery: 7, eventChance: 0.15 },
-        hard: { label: 'Сложно', w: 30, h: 30, mines: 0.145, eventEvery: 6, eventChance: 0.2 },
-        veryhard: { label: 'Очень сложно', w: 36, h: 36, mines: 0.16, eventEvery: 5, eventChance: 0.24 },
-        impossible: { label: 'Невозможно', w: 42, h: 42, mines: 0.18, eventEvery: 4, eventChance: 0.28 },
-      };
+window.addEventListener('keydown', (e) => {
+  if(!G || G.over || G.won) return;
+  if(e.key === '1') { G.selectedItem = 'defer'; flagMode = false; updateFlagButton(); setStatus('Выбран предмет: Дефер.'); render(); }
+  else if(e.key === '2') { G.selectedItem = 'shield'; flagMode = false; updateFlagButton(); setStatus('Выбран предмет: Щит.'); render(); }
+  else if(e.key === '3') { G.selectedItem = 'drone'; flagMode = false; updateFlagButton(); setStatus('Выбран предмет: Дрон.'); render(); }
+  else if(e.key === '4') { G.selectedItem = 'safebomb'; flagMode = false; updateFlagButton(); setStatus('Выбран предмет: Безопасная бомба.'); render(); }
+  else if(e.key === 'f' || e.key === 'F') { toggleFlagMode(); }
+  else if(e.key === 'Escape') { G.selectedItem = null; flagMode = false; updateFlagButton(); render(); setStatus('Готово.'); }
+});
 
-      const state = {
-        diff: 'normal',
-        w: 24,
-        h: 24,
-        board: [],
-        firstClick: false,
-        over: false,
-        won: false,
-        moves: 0,
-        startTs: 0,
-        time: 0,
-        timer: null,
-        selectedTool: 'open',
-        mineTotal: 0,
-        inventory: { defer: 0, shield: 1, drone: 0, bomb: 0 },
-        tutorialStep: 0,
-        wikiTab: 'modes',
-        firstSeen: localStorage.getItem(LS_FIRST) || '',
-        zoom: Number(localStorage.getItem(LS_ZOOM) || '100') / 100,
-      };
+const TUT_SIZE=6;
+let TUT, tutStep=0;
+const TUT_LAYOUT = [
+ [0,0,0,0,0,0],
+ [0,1,0,0,0,0],
+ [0,0,0,0,0,0],
+ [0,0,0,0,0,3],
+ [0,0,0,0,0,0],
+ [0,0,0,2,0,0],
+];
+const TUT_STEPS = [
+  { text:'Это учебное поле. Сначала нажми на отмеченную клетку в центре. Вокруг первого хода откроется безопасная зона.', target:[2,2], action:{type:'open',x:2,y:2} },
+  { text:'Отлично. Пустые клетки могут вскрывать соседние области сами, если вокруг них нет мин.', target:null, action:null },
+  { text:'Теперь пометь подозрительную клетку флагом. Долго нажми на телефоне или нажми правой кнопкой мыши.', target:[1,1], action:{type:'flag',x:1,y:1} },
+  { text:'Открой таймерную мину. После этого начнётся обратный отсчёт.', target:[3,5], action:{type:'open',x:3,y:5} },
+  { text:'Видишь число на минах такого типа? Оно уменьшается после каждого хода. Когда дойдёт до нуля, мина взорвётся.', target:[3,5], action:null },
+  { text:'Открой клетку с Дефером. Этот предмет нужен для обезвреживания таймерной мины.', target:[5,3], action:{type:'open',x:5,y:3} },
+  { text:'Нажми на иконку Дефера внизу, чтобы выбрать его.', target:null, action:{type:'selectDefer'} },
+  { text:'Теперь нажми на таймерную мину, чтобы обезвредить её.', target:[3,5], action:{type:'useDefer',x:3,y:5} },
+  { text:'Сейчас учебное поле полностью очищается, чтобы показать финальный вид.', target:null, action:null },
+  { text:'Готово. Так выглядит полностью вычищенная учебная доска. Можно переходить к настоящей игре.', target:null, action:null, final:true },
+];
 
-      const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-      const rand = n => Math.floor(Math.random() * n);
-      const key = (x, y) => `${x},${y}`;
-      const inBounds = (x, y) => x >= 0 && y >= 0 && x < state.w && y < state.h;
-      const get = (x, y) => state.board[y]?.[x];
+function startTutorial(){
+  document.getElementById('gameWindow').style.display='none';
+  document.getElementById('difficultyModal').classList.remove('show');
+  document.getElementById('resultModal').classList.remove('show');
+  TUT = {
+    board: TUT_LAYOUT.map(row=>row.map(v=>{
+      if(v===1) return {type:'mine',mineType:'normal'};
+      if(v===3) return {type:'mine',mineType:'timer'};
+      if(v===2) return {type:'defer'};
+      return {type:'empty'};
+    })),
+    revealed: Array.from({length:TUT_SIZE},()=>Array(TUT_SIZE).fill(false)),
+    flagged: Array.from({length:TUT_SIZE},()=>Array(TUT_SIZE).fill(false)),
+    timers:{}, frozen:{}, burned:new Set(),
+    inventory:{defer:0,shield:0,drone:0,safebomb:0},
+    selectedItem:null, size:TUT_SIZE, moves:0, cellsOpened:0, firstClickDone:true, over:false, won:false,
+  };
+  tutStep=0;
+  renderTutBoard();
+  document.getElementById('tutorialOverlay').classList.add('show');
+  showTutStep();
+}
 
-      function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = rand(i + 1); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
-      function neighbors(x, y, dist = 1) { const out = []; for (let dy = -dist; dy <= dist; dy++) for (let dx = -dist; dx <= dist; dx++) { if (dx === 0 && dy === 0) continue; const nx = x + dx, ny = y + dy; if (inBounds(nx, ny)) out.push([nx, ny]); } return out; }
-      function showHint(text) { hint.textContent = text; hint.classList.add('show'); clearTimeout(showHint._t); showHint._t = setTimeout(() => hint.classList.remove('show'), 1500); }
-      function setStatus(text, cls = '') { statusText.textContent = text; statusText.className = cls; }
-      function format3(n) { return String(n).padStart(3, '0').slice(-3); }
+function renderTutBoard(){
+  const wrap=document.getElementById('tutBoardWrap');
+  wrap.innerHTML='';
+  const cs=Math.min(46, Math.floor((window.innerWidth-40)/TUT_SIZE));
+  const board=document.createElement('div');
+  board.className='board';
+  board.id='tutBoard';
+  board.style.setProperty('--cs',cs+'px');
+  board.style.gridTemplateColumns=`repeat(${TUT_SIZE},var(--cs))`;
+  board.style.border='3px solid #404040';
+  for(let x=0;x<TUT_SIZE;x++) for(let y=0;y<TUT_SIZE;y++){
+    const d=document.createElement('div');
+    d.className='cell hidden';
+    d.dataset.x=x; d.dataset.y=y;
+    d.onclick=()=>tutCellClick(x,y,'tap');
+    d.oncontextmenu=(e)=>{e.preventDefault(); tutCellClick(x,y,'flag');};
+    let pressTimer=null;
+    d.addEventListener('touchstart',()=>{ pressTimer=setTimeout(()=>tutCellClick(x,y,'flag'),420); },{passive:true});
+    d.addEventListener('touchend',(e)=>{ e.preventDefault(); if(pressTimer){clearTimeout(pressTimer); tutCellClick(x,y,'tap');} });
+    d.addEventListener('touchmove',()=>clearTimeout(pressTimer));
+    board.appendChild(d);
+  }
+  wrap.appendChild(board);
+  updateTutBoard();
+}
 
-      function updateFace(stateName = 'play') {
-        faceIcon.parentElement.classList.remove('win', 'lose');
-        if (stateName === 'win') {
-          faceIcon.parentElement.classList.add('win');
-          faceIcon.innerHTML = '<path fill="currentColor" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm-3 6.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm6 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm-5.1 6.1h6.2v1.8H9.9z"/>';
-        } else if (stateName === 'lose') {
-          faceIcon.parentElement.classList.add('lose');
-          faceIcon.innerHTML = '<path fill="currentColor" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm-3 6.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm6 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm-5.2 6.2 1.1-1.1 1.1 1.1 1.1-1.1 1.1 1.1-1.1 1.1 1.1 1.1-1.1 1.1-1.1-1.1-1.1 1.1-1.1-1.1 1.1-1.1-1.1-1.1Z"/>';
-        } else {
-          faceIcon.innerHTML = '<path fill="currentColor" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm-3 6.2a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm6 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm-4 4.4h2.2c1.8 0 3.2.7 4.3 2l1.5-1.2c-1.4-1.8-3.6-2.8-5.8-2.8s-4.4 1-5.8 2.8l1.5 1.2c1.1-1.3 2.5-2 4.1-2Z"/>';
+function updateTutBoard(){
+  for(let x=0;x<TUT_SIZE;x++) for(let y=0;y<TUT_SIZE;y++){
+    const el=document.getElementById('tutBoard').children[x*TUT_SIZE+y];
+    const revealed=TUT.revealed[x][y], flagged=TUT.flagged[x][y], data=TUT.board[x][y];
+    el.innerHTML=''; el.className='cell';
+    const key=`${x}-${y}`;
+    if(flagged){ el.classList.add('hidden','flagged'); el.innerHTML=icon('flag'); continue; }
+    if(!revealed){ el.classList.add('hidden'); continue; }
+    el.classList.add('opened');
+    if(data.type==='mine'){
+      if(data.mineType==='timer'){
+        el.innerHTML=icon('timer');
+        if(TUT.timers[key]!==undefined){
+          const b=document.createElement('div'); b.className='timer-badge'; b.textContent=TUT.timers[key]; el.appendChild(b);
         }
+      } else {
+        el.innerHTML=icon('mine');
       }
+    } else if(data.type==='defer'){ el.innerHTML=icon('defer'); }
+    else {
+      let n=countAdj(TUT,x,y);
+      if(n>0){ el.textContent=n; el.classList.add('n'+Math.min(n,8)); }
+    }
+  }
+}
 
-      function updateHUD() {
-        minesLeftEl.textContent = format3(Math.max(0, state.mineTotal - state.inventory.defer - state.inventory.shield));
-        timeLeftEl.textContent = format3(state.time);
-        movesEl.textContent = String(state.moves);
-        firstSeenText.textContent = state.firstSeen ? `первый вход: ${state.firstSeen}` : '';
-      }
+function completeTutorialBoard(){
+  for(let x=0;x<TUT_SIZE;x++) for(let y=0;y<TUT_SIZE;y++){
+    const c=TUT.board[x][y];
+    if(c.type==='mine' && c.mineType==='normal') TUT.flagged[x][y]=true;
+    if(c.type!=='mine') TUT.revealed[x][y]=true;
+  }
+  updateTutBoard();
+}
 
-      function setZoom(percent, restartRender = true) {
-        state.zoom = percent / 100;
-        document.documentElement.style.setProperty('--zoom', state.zoom.toFixed(2));
-        localStorage.setItem(LS_ZOOM, String(percent));
-        if (restartRender) renderBoard();
-      }
-
-      function applyDifficulty(key, restart = true) {
-        state.diff = key;
-        const d = DIFFS[key];
-        state.w = d.w; state.h = d.h;
-        const maxW = Math.min(window.innerWidth - 28, 1050);
-        const maxH = Math.max(240, window.innerHeight - 280);
-        const size = clamp(Math.floor(Math.min(maxW / d.w, maxH / d.h)), 14, 18);
-        document.documentElement.style.setProperty('--cell', `${size}px`);
-        if (restart) startGame();
-      }
-
-      function createBoard() {
-        state.board = Array.from({ length: state.h }, (_, y) => Array.from({ length: state.w }, (_, x) => ({
-          x, y, type: 'empty', revealed: false, flagged: false, freeze: 0, pickup: null, countdown: null, active: false, radiation: 0,
-        })));
-      }
-
-      function safeZone(x, y, r = 1) { const s = new Set(); for (let yy = y - r; yy <= y + r; yy++) for (let xx = x - r; xx <= x + r; xx++) if (inBounds(xx, yy)) s.add(key(xx, yy)); return s; }
-      function pickRandomCell(pred, exclude = new Set()) { const arr = []; for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) { const c = get(x, y); if (exclude.has(key(x, y))) continue; if (!pred || pred(c)) arr.push(c); } return arr.length ? arr[rand(arr.length)] : null; }
-
-      function placeContents(sx, sy) {
-        const d = DIFFS[state.diff];
-        state.mineTotal = Math.max(8, Math.floor(state.w * state.h * d.mines));
-        const safe = safeZone(sx, sy, 1);
-        const free = [];
-        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) if (!safe.has(key(x, y))) free.push([x, y]);
-        shuffle(free);
-
-        const timerCount = Math.max(2, Math.floor(state.mineTotal * 0.045));
-        const counts = {
-          timer: timerCount,
-          normal: Math.max(1, Math.floor(state.mineTotal * 0.42)),
-          fire: Math.max(1, Math.floor(state.mineTotal * 0.10)),
-          ice: Math.max(1, Math.floor(state.mineTotal * 0.09)),
-          electric: Math.max(1, Math.floor(state.mineTotal * 0.08)),
-          radiation: Math.max(1, Math.floor(state.mineTotal * 0.07)),
-          teleport: Math.max(1, Math.floor(state.mineTotal * 0.05)),
-          mimic: Math.max(1, Math.floor(state.mineTotal * 0.04)),
-          magnet: 1,
-        };
-        let used = Object.values(counts).reduce((a, b) => a + b, 0);
-        counts.normal += Math.max(0, state.mineTotal - used);
-
-        const assign = [];
-        for (const [type, count] of Object.entries(counts)) for (let i = 0; i < count; i++) assign.push(type);
-        shuffle(assign);
-
-        for (let i = 0; i < assign.length && i < free.length; i++) {
-          const [x, y] = free[i];
-          const c = get(x, y);
-          c.type = assign[i];
-          if (c.type === 'radiation') c.radiation = 5 + rand(3);
-          if (c.type === 'timer') { c.countdown = 3 + rand(5); c.active = false; }
+function tutCellClick(x,y,kind){
+  const step=TUT_STEPS[tutStep];
+  if(!step.action) return;
+  if(step.action.type==='open' && kind==='tap'){
+    if(step.action.x===x && step.action.y===y){
+      if(tutStep===0){
+        TUT.revealed[x][y]=true;
+        for(let dx=-2;dx<=2;dx++) for(let dy=-2;dy<=2;dy++){
+          const nx=x+dx, ny=y+dy;
+          if(nx<0||ny<0||nx>=TUT_SIZE||ny>=TUT_SIZE) continue;
+          if(TUT.board[nx][ny].type==='mine') continue;
+          TUT.revealed[nx][ny]=true;
         }
-
-        const empties = [];
-        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
-          const c = get(x, y);
-          if (c.type === 'empty' && !safe.has(key(x, y))) empties.push(c);
-        }
-        shuffle(empties);
-        for (let i = 0; i < timerCount && i < empties.length; i++) empties[i].pickup = 'defer';
-        const bonusKinds = ['shield', 'drone', 'bomb'];
-        for (let i = timerCount; i < timerCount + Math.max(2, Math.floor(state.mineTotal * 0.01)) && i < empties.length; i++) empties[i].pickup = bonusKinds[rand(bonusKinds.length)];
+      } else if(TUT.board[x][y].type==='defer'){
+        TUT.revealed[x][y]=true;
+        TUT.inventory.defer++;
+      } else if(TUT.board[x][y].type==='mine' && TUT.board[x][y].mineType==='timer'){
+        TUT.revealed[x][y]=true;
+        TUT.timers[`${x}-${y}`] = 3;
       }
+      updateTutBoard();
+      advanceTut();
+    }
+  } else if(step.action.type==='flag' && kind==='flag'){
+    if(step.action.x===x && step.action.y===y){
+      TUT.flagged[x][y]=true;
+      updateTutBoard();
+      advanceTut();
+    }
+  } else if(step.action.type==='useDefer'){
+    if(TUT.selectedItem==='defer' && kind==='tap' && step.action.x===x && step.action.y===y){
+      TUT.flagged[x][y]=true;
+      TUT.inventory.defer = Math.max(0, TUT.inventory.defer-1);
+      updateTutBoard();
+      advanceTut();
+    }
+  }
+}
 
-      function countsMap() {
-        const counts = Array.from({ length: state.h }, () => Array(state.w).fill(0));
-        const mineLike = new Set(['normal', 'timer', 'fire', 'ice', 'electric', 'radiation', 'teleport', 'magnet', 'mimic']);
-        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
-          if (!mineLike.has(get(x, y).type)) continue;
-          for (const [nx, ny] of neighbors(x, y)) counts[ny][nx] += 1;
-        }
-        return counts;
-      }
+function showTutStep(){
+  const step=TUT_STEPS[tutStep];
+  const tip=document.getElementById('tutTip');
+  const spot=document.getElementById('tutSpot');
 
-      function visibleCount(base, x, y) {
-        let noise = 0;
-        for (let yy = 0; yy < state.h; yy++) for (let xx = 0; xx < state.w; xx++) {
-          const c = get(xx, yy);
-          if (c.type === 'radiation' && c.revealed && c.radiation > 0) {
-            const d = Math.max(Math.abs(xx - x), Math.abs(yy - y));
-            if (d <= 2) noise += 1;
-          }
-        }
-        return noise ? Math.max(0, base + [-1, 0, 1][rand(3)]) : base;
-      }
+  if(step.action && step.action.type==='selectDefer'){
+    renderTutInventory();
+  } else {
+    const oldInv=document.getElementById('tutInvBar');
+    if(oldInv) oldInv.remove();
+  }
 
-      function renderBoard() {
-        const counts = countsMap();
-        board.style.gridTemplateColumns = `repeat(${state.w}, var(--cell))`;
-        board.innerHTML = '';
-        const frag = document.createDocumentFragment();
+  tip.innerHTML = step.text + (step.action ? '' : `<br><button class="win98-btn" id="tutNextBtn">${step.final ? 'Начать игру' : 'Далее'}</button>`);
 
-        for (let y = 0; y < state.h; y++) {
-          for (let x = 0; x < state.w; x++) {
-            const c = get(x, y);
-            const b = document.createElement('button');
-            b.className = 'cell';
-            b.dataset.x = x;
-            b.dataset.y = y;
+  if(step.target){
+    const el=document.getElementById('tutBoard').children[step.target[0]*TUT_SIZE+step.target[1]];
+    const r=el.getBoundingClientRect();
+    spot.style.display='block';
+    spot.style.left=(r.left-3)+'px';
+    spot.style.top=(r.top-3)+'px';
+    spot.style.width=(r.width+2)+'px';
+    spot.style.height=(r.height+2)+'px';
+    let tipTop=r.bottom+10;
+    if(tipTop+120>window.innerHeight) tipTop=r.top-130;
+    tip.style.top=Math.max(8,tipTop)+'px';
+    tip.style.left=Math.min(Math.max(8,r.left-40), window.innerWidth-300)+'px';
+    tip.style.transform='none';
+  } else {
+    spot.style.display='none';
+    tip.style.top='50%';
+    tip.style.left='50%';
+    tip.style.transform='translate(-50%,-50%)';
+  }
 
-            if (!c.revealed && c.type === 'timer' && c.active) { b.classList.add('timer-badge'); b.dataset.timer = c.countdown; }
-            if (c.revealed) b.classList.add('revealed');
-            if (c.flagged) b.classList.add('flagged');
-            if (c.freeze > 0) b.classList.add('frozen');
-            if (!c.revealed && c.pickup) b.classList.add('bad-pickup');
+  if(!step.action){
+    document.getElementById('tutNextBtn').onclick=()=>{
+      if(step.final) endTutorial();
+      else advanceTut();
+    };
+  }
+}
 
-            if (c.revealed) {
-              if (c.type === 'empty') {
-                const n = visibleCount(counts[y][x], x, y);
-                if (n > 0) { b.textContent = String(n); b.classList.add(`num-${Math.min(8, n)}`); }
-              } else if (c.type === 'normal' || c.type === 'mimic') {
-                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-mine"></use></svg>';
-              } else if (c.type === 'timer') {
-                b.innerHTML = `<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-clock"></use></svg><span style="position:absolute;right:1px;bottom:0;font-size:8px;line-height:1">${c.countdown ?? 0}</span>`;
-              } else if (c.type === 'fire') {
-                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-fire"></use></svg>';
-              } else if (c.type === 'ice') {
-                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-ice"></use></svg>';
-              } else if (c.type === 'electric') {
-                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-electric"></use></svg>';
-              } else if (c.type === 'radiation') {
-                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-radiation"></use></svg>';
-              } else if (c.type === 'teleport') {
-                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-teleport"></use></svg>';
-              } else if (c.type === 'magnet') {
-                b.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" shape-rendering="crispEdges"><use href="#i-magnet"></use></svg>';
-              }
-              if (c.pickup) {
-                const map = { defer: ['#i-defer', '#2d6bff'], shield: ['#i-shield', '#1b8f3a'], drone: ['#i-drone', '#a300d6'], bomb: ['#i-bomb', '#ff5500'] };
-                const [href, color] = map[c.pickup] || ['#i-bomb', '#ff5500'];
-                b.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 16 16" width="11" height="11" style="position:absolute;left:1px;bottom:1px;color:${color};shape-rendering:crispEdges"><use href="${href}"></use></svg>`);
-              }
-            }
-            frag.appendChild(b);
-          }
-        }
-        board.appendChild(frag);
-        updateHUD();
-      }
+function renderTutInventory(){
+  if(document.getElementById('tutInvBar')) return;
+  const wrap=document.getElementById('tutBoardWrap');
+  const bar=document.createElement('div');
+  bar.id='tutInvBar';
+  bar.className='inventory-bar';
+  bar.style.marginTop='6px';
+  const div=document.createElement('div');
+  div.className='inv-item active'+(TUT.selectedItem==='defer'?' selected':'');
+  div.innerHTML=icon('defer')+`<div class="inv-badge">${TUT.inventory.defer}</div>`;
+  div.onclick=()=>{
+    TUT.selectedItem='defer';
+    setStatus('Дефер выбран. Теперь нажми на таймерную мину.');
+    advanceTut();
+  };
+  bar.appendChild(div);
+  wrap.appendChild(bar);
+}
 
-      function revealAllMines() { for (const row of state.board) for (const c of row) if (c.type !== 'empty') c.revealed = true; }
-      function activateTimersAroundOpenNumber(x, y) { const counts = countsMap(); if (counts[y][x] <= 0) return; for (const [nx, ny] of neighbors(x, y)) { const n = get(nx, ny); if (n?.type === 'timer') n.active = true; } }
+function advanceTut(){
+  tutStep++;
+  if(tutStep>=TUT_STEPS.length){ endTutorial(); return; }
+  showTutStep();
+}
 
-      function useDefer(x, y) {
-        const c = get(x, y);
-        if (state.inventory.defer <= 0) return showHint('Деферов нет.');
-        if (!c || c.revealed) return showHint('Дефер работает только по скрытой клетке.');
-        state.inventory.defer -= 1;
-        if (c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Таймерная мина обезврежена.'); }
-        else showHint('Это не таймерная мина.');
-      }
-      function useDrone(x, y) { if (state.inventory.drone <= 0) return showHint('Дронов нет.'); state.inventory.drone -= 1; shuffle(neighbors(x, y, 2)).slice(0, 6).forEach(([nx, ny]) => { const c = get(nx, ny); if (c && !c.revealed) c.revealed = true; }); showHint('Дрон показал несколько клеток.'); }
-      function useBomb(x, y) { if (state.inventory.bomb <= 0) return showHint('Бомб нет.'); state.inventory.bomb -= 1; [[x, y], ...neighbors(x, y)].forEach(([nx, ny]) => { const c = get(nx, ny); if (!c) return; if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; } c.revealed = true; }); showHint('Область открыта безопасно.'); }
+function endTutorial(){
+  completeTutorialBoard();
+  setTimeout(()=>{
+    document.getElementById('tutorialOverlay').classList.remove('show');
+    document.getElementById('tutBoardWrap').innerHTML='';
+    const inv=document.getElementById('tutInvBar'); if(inv) inv.remove();
+    showDifficultyModal();
+  }, 250);
+}
 
-      function stepTimers() {
-        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
-          const c = get(x, y);
-          if (c.freeze > 0) c.freeze -= 1;
-          if (c.type === 'radiation' && c.revealed && c.radiation > 0) c.radiation -= 1;
-          if (c.type === 'timer' && c.active && c.countdown != null) {
-            c.countdown -= 1;
-            if (c.countdown <= 0) {
-              if (state.inventory.shield > 0) { state.inventory.shield -= 1; c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Щит погасил таймерную мину.'); }
-              else { state.over = true; updateFace('lose'); setStatus('взорвались', 'bad'); revealAllMines(); showHint('Таймерная мина сработала.'); }
-              return;
-            }
-          }
-        }
-      }
-
-      function randomEvent() {
-        const type = ['spawn', 'noise', 'shift'][rand(3)];
-        if (type === 'spawn') {
-          const spot = pickRandomCell(c => c.type === 'empty' && !c.revealed && !c.flagged);
-          if (!spot) return;
-          spot.type = ['normal', 'fire', 'ice', 'electric', 'radiation', 'teleport'][rand(6)];
-          if (spot.type === 'radiation') spot.radiation = 5;
-          showHint('Событие: на поле появилась новая мина.');
-        } else if (type === 'noise') {
-          showHint('Событие: цифры стали ненадёжными.');
-        } else {
-          const cells = shuffle([...Array(state.w * state.h)].map((_, i) => [i % state.w, Math.floor(i / state.w)])).slice(0, 8);
-          cells.forEach(([x, y]) => {
-            const c = get(x, y);
-            if (!c || c.revealed || c.type === 'empty') return;
-            const t = pickRandomCell(k => k.type === 'empty' && !k.revealed);
-            if (!t) return;
-            [c.type, t.type] = [t.type, c.type];
-            [c.countdown, t.countdown] = [t.countdown, c.countdown];
-            [c.active, t.active] = [t.active, c.active];
-            [c.pickup, t.pickup] = [t.pickup, c.pickup];
-          });
-          showHint('Подземный поток сместил несколько клеток.');
-        }
-      }
-
-      function worldTick() {
-        const d = DIFFS[state.diff];
-        if (!state.startTs) state.startTs = Date.now();
-        state.time = Math.floor((Date.now() - state.startTs) / 1000);
-        if (state.moves > 0 && state.moves % d.eventEvery === 0 && Math.random() < d.eventChance) randomEvent();
-        stepTimers();
-      }
-
-      function checkWin() { if (!state.over && !state.won && state.board.flat().every(c => c.type !== 'empty' || c.revealed)) { state.won = true; updateFace('win'); setStatus('победа', 'good'); showHint('Поле очищено.'); } }
-
-      function startGame() {
-        clearInterval(state.timer);
-        state.firstClick = false;
-        state.over = false;
-        state.won = false;
-        state.moves = 0;
-        state.time = 0;
-        state.startTs = 0;
-        state.mineTotal = 0;
-        state.inventory = { defer: 0, shield: 1, drone: 0, bomb: 0 };
-        createBoard();
-        updateFace('play');
-        setStatus('готов', '');
-        updateHUD();
-        renderBoard();
-        showHint('Первый клик всегда безопасный.');
-      }
-
-      function explodeMine(x, y) {
-        if (state.inventory.shield > 0) { state.inventory.shield -= 1; const c = get(x, y); c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Щит спас от взрыва.'); return; }
-        state.over = true; updateFace('lose'); setStatus('взорвались', 'bad'); revealAllMines(); const c = get(x, y); if (c) c.revealed = true; renderBoard(); showHint('Конец игры.');
-      }
-
-      function triggerCell(x, y) {
-        const c = get(x, y);
-        if (!c) return;
-        if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') return explodeMine(x, y);
-        if (c.type === 'fire') { c.revealed = true; neighbors(x, y).forEach(([nx, ny]) => openCell(nx, ny)); return; }
-        if (c.type === 'ice') { c.revealed = true; neighbors(x, y).forEach(([nx, ny]) => get(nx, ny).freeze = Math.max(get(nx, ny).freeze, 2)); return; }
-        if (c.type === 'electric') { c.revealed = true; shuffle(neighbors(x, y, 2)).slice(0, 5).forEach(([nx, ny]) => openCell(nx, ny)); return; }
-        if (c.type === 'radiation') { c.revealed = true; c.radiation = 5; return; }
-        if (c.type === 'teleport') { c.revealed = true; moveNearbyMines(x, y, 'teleport'); return; }
-        if (c.type === 'magnet') { c.revealed = true; moveNearbyMines(x, y, 'magnet'); }
-      }
-
-      function moveNearbyMines(x, y, mode) {
-        const source = neighbors(x, y, 1).filter(([nx, ny]) => { const c = get(nx, ny); return c && !c.revealed && c.type !== 'empty'; });
-        const empties = [];
-        for (let yy = 0; yy < state.h; yy++) for (let xx = 0; xx < state.w; xx++) { const c = get(xx, yy); if (!c.revealed && c.type === 'empty') empties.push([xx, yy]); }
-        shuffle(empties);
-        for (const [sx, sy] of source) {
-          if (!empties.length) break;
-          const [dx, dy] = empties.pop();
-          const a = get(sx, sy); const b = get(dx, dy);
-          [a.type, b.type] = [b.type, a.type]; [a.countdown, b.countdown] = [b.countdown, a.countdown]; [a.active, b.active] = [b.active, a.active]; [a.pickup, b.pickup] = [b.pickup, a.pickup];
-        }
-        showHint(mode === 'magnet' ? 'Магнит сдвинул ближайшие мины.' : 'Телепорт перемешал соседние клетки.');
-      }
-
-      function handleFlag(x, y) { const c = get(x, y); if (!c || c.revealed) return; c.flagged = !c.flagged; }
-
-      function openCell(x, y) {
-        const c = get(x, y);
-        if (!c || c.revealed || c.flagged || c.freeze > 0 || state.over || state.won) return;
-        if (!state.firstClick) { state.firstClick = true; placeContents(x, y); }
-        c.revealed = true;
-        if (c.pickup) { state.inventory[c.pickup] += 1; showHint(`Подобрано: ${c.pickup}.`); c.pickup = null; }
-        if (c.type === 'empty') {
-          const counts = countsMap();
-          if (counts[y][x] === 0) {
-            for (const [nx, ny] of neighbors(x, y)) {
-              const n = get(nx, ny);
-              if (n && !n.revealed && !n.flagged && n.type === 'empty') floodReveal(nx, ny);
-            }
-          }
-          activateTimersAroundOpenNumber(x, y);
-        } else {
-          triggerCell(x, y);
-        }
-      }
-
-      function floodReveal(x, y) {
-        const stack = [[x, y]];
-        const seen = new Set();
-        const counts = countsMap();
-        while (stack.length) {
-          const [cx, cy] = stack.pop();
-          const kk = key(cx, cy);
-          if (seen.has(kk)) continue;
-          seen.add(kk);
-          const c = get(cx, cy);
-          if (!c || c.revealed || c.flagged || c.freeze > 0) continue;
-          c.revealed = true;
-          if (c.pickup) { state.inventory[c.pickup] += 1; c.pickup = null; }
-          if (c.type === 'empty') {
-            if (counts[cy][cx] === 0) for (const [nx, ny] of neighbors(cx, cy)) { const n = get(nx, ny); if (n && !n.revealed && !n.flagged && n.type === 'empty') stack.push([nx, ny]); }
-            activateTimersAroundOpenNumber(cx, cy);
-          }
-        }
-      }
-
-      function useDefer(x, y) {
-        const c = get(x, y);
-        if (state.inventory.defer <= 0) return showHint('Деферов нет.');
-        if (!c || c.revealed) return showHint('Дефер работает только по скрытой клетке.');
-        state.inventory.defer -= 1;
-        if (c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Таймерная мина обезврежена.'); }
-        else showHint('Это не таймерная мина.');
-      }
-
-      function useDrone(x, y) { if (state.inventory.drone <= 0) return showHint('Дронов нет.'); state.inventory.drone -= 1; shuffle(neighbors(x, y, 2)).slice(0, 6).forEach(([nx, ny]) => { const c = get(nx, ny); if (c && !c.revealed) c.revealed = true; }); showHint('Дрон показал несколько клеток.'); }
-      function useBomb(x, y) { if (state.inventory.bomb <= 0) return showHint('Бомб нет.'); state.inventory.bomb -= 1; [[x, y], ...neighbors(x, y)].forEach(([nx, ny]) => { const c = get(nx, ny); if (!c) return; if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; } c.revealed = true; }); showHint('Область открыта безопасно.'); }
-
-      function handleCell(x, y) {
-        const c = get(x, y);
-        if (!c || state.over || state.won) return;
-        if (!state.firstClick) { state.firstClick = true; placeContents(x, y); }
-        if (state.selectedTool === 'flag') handleFlag(x, y);
-        else if (state.selectedTool === 'defer') useDefer(x, y);
-        else if (state.selectedTool === 'drone') useDrone(x, y);
-        else if (state.selectedTool === 'bomb') useBomb(x, y);
-        else openCell(x, y);
-        if (!state.over && !state.won) { state.moves += 1; worldTick(); renderBoard(); checkWin(); }
-      }
-
-      function openTutorial() { tutorialLayer.classList.add('show'); renderTutorial(); }
-      function closeTutorial() { tutorialLayer.classList.remove('show'); localStorage.setItem(LS_TUTORIAL, '1'); }
-      function openWiki() { wikiLayer.classList.add('show'); renderWiki(); }
-      function closeWiki() { wikiLayer.classList.remove('show'); }
-
-      function renderTutorial() {
-        const steps = [
-          'Нажми на любую клетку. Первый ход создаёт безопасную зону вокруг старта.',
-          'Флаг ставь на подозрительные клетки. Таймерные мины не видно заранее — они молчат, пока рядом не откроют число.',
-          'Дефер работает только по таймерным минам и не лежит на поле как явная подсказка.',
-          'Огонь, лёд, электричество, телепорты и магниты добавляют хаос прямо по ходу партии.',
-          'Сложность меняет размер поля: от нормального до очень большого.',
-        ];
-        const titles = ['Старт', 'Флаги', 'Дефер', 'Хаос', 'Сложность'];
-        tutorialMeta.textContent = state.firstSeen ? `первая дата входа: ${state.firstSeen}` : 'новый игрок';
-        tutorialText.textContent = steps[state.tutorialStep];
-        tutorialSteps.innerHTML = steps.map((t, i) => `<div class="step-row"><div class="dot ${i === state.tutorialStep ? 'done' : ''}"></div><div><strong>${titles[i]}</strong><div class="small-note">${t}</div></div></div>`).join('');
-        tutorialDiffs.innerHTML = Object.entries(DIFFS).map(([k, d]) => `<button class="mini-btn ${k === state.diff ? 'active' : ''}" data-diff="${k}">${d.label} <span class="small-note">${d.w}×${d.h}</span></button>`).join('');
-        tutorialDiffs.querySelectorAll('[data-diff]').forEach(btn => btn.addEventListener('click', () => { difficultySelect.value = btn.dataset.diff; applyDifficulty(btn.dataset.diff, true); renderTutorial(); }));
-        tutorialBack.textContent = state.tutorialStep === 0 ? 'Пропустить' : 'Назад';
-        tutorialNext.textContent = state.tutorialStep === steps.length - 1 ? 'Старт' : 'Дальше';
-      }
-
-      function renderWiki() {
-        const tabs = { modes: { label: 'Механики', icon: '#i-wiki' }, mines: { label: 'Мины', icon: '#i-mine' }, items: { label: 'Предметы', icon: '#i-shield' }, ui: { label: 'Интерфейс', icon: '#i-clock' }, tips: { label: 'Советы', icon: '#i-bomb' } };
-        wikiTabs.innerHTML = Object.entries(tabs).map(([k, v]) => `<button class="mini-btn ${state.wikiTab === k ? 'active' : ''}" data-wiki="${k}"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="${v.icon}"></use></svg> ${v.label}</button>`).join('');
-        wikiTabs.querySelectorAll('[data-wiki]').forEach(btn => btn.addEventListener('click', () => { state.wikiTab = btn.dataset.wiki; renderWiki(); }));
-
-        const content = {
-          modes: `
-            <div class="grid-cards">
-              <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-wiki"></use></svg> Основная цель</h3><ul><li>Открыть все безопасные клетки.</li><li>Не открывать мины напрямую.</li><li>Справиться с хаосом, который создают специальные клетки и события.</li></ul></div>
-              <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-clock"></use></svg> Как движется партия</h3><ul><li>Каждый ход двигает мир вперёд.</li><li>События могут добавлять новые угрозы.</li><li>Таймерные мины начинают жить только после того, как рядом открыт номер.</li></ul></div>
-            </div>
-            <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-teleport"></use></svg> Что делает поле особенным</h3><ul><li>Некоторые мины меняют соседей местами.</li><li>Радиация делает цифры неидеальными.</li><li>На больших сложностях карта заметно больше и плотнее.</li><li>Случайные события добавляют новый слой напряжения без второго игрока и без PvP.</li></ul></div>
-          `,
-          mines: `
-            <div class="mini-list">
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-mine"></use></svg> Обычная мина</strong><div class="small-note">Стандартная мина. Никаких трюков: открыл — проиграл.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-clock"></use></svg> Таймерная мина</strong><div class="small-note">Скрыта до активации. Не появляется как явная подсказка и начинает работать только после открытия рядом цифры. Когда активна, в углу виден маленький таймер.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-fire"></use></svg> Огненная мина</strong><div class="small-note">После открытия зажигает соседние клетки и может запустить цепочку раскрытий.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-ice"></use></svg> Ледяная мина</strong><div class="small-note">Замораживает соседние клетки на короткое время. Замороженные клетки нельзя открыть.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-electric"></use></svg> Электрическая мина</strong><div class="small-note">Может открыть несколько соседних клеток сразу. Очень любит ломать аккуратные планы.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-radiation"></use></svg> Радиационная мина</strong><div class="small-note">Цифры рядом могут врать на ±1, поэтому доверять им нужно осторожно.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-teleport"></use></svg> Телепорт</strong><div class="small-note">Меняет местами часть соседних мин с пустыми клетками и после этого поле читается хуже.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-magnet"></use></svg> Магнит</strong><div class="small-note">Сдвигает ближайшие мины. Из-за него карта может немного «плыть».</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-mine"></use></svg> Мимик</strong><div class="small-note">Маскируется под обычную клеточную логику. Выглядит тихо, но опасен как мина.</div></div>
-            </div>
-          `,
-          items: `
-            <div class="mini-list">
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-defer"></use></svg> Дефер</strong><div class="small-note">Обезвреживает таймерную мину. Он не отображается заранее и попадает в инвентарь скрыто, как редкая находка. Количество деферов примерно соответствует числу таймерных мин.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-shield"></use></svg> Щит</strong><div class="small-note">Поглощает один взрыв. Если бы не он, некоторые партии заканчивались бы слишком быстро.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-drone"></use></svg> Дрон-разведчик</strong><div class="small-note">Показывает несколько скрытых клеток рядом с выбранной точкой. Удобен, когда карта уже слишком шумная.</div></div>
-              <div class="mini-item"><strong><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-bomb"></use></svg> Бомба для открытия</strong><div class="small-note">Открывает маленькую область безопасно. Полезна, если хочется немного воздуха в тесной зоне.</div></div>
-            </div>
-          `,
-          ui: `
-            <div class="mini-list">
-              <div class="mini-item"><strong>Верхняя панель</strong><div class="small-note">Слева — мины, по центру — кнопка новой игры, справа — таймер. Это сделано специально как у старого сапёра.</div></div>
-              <div class="mini-item"><strong>Цветные цифры</strong><div class="small-note">1 синий, 2 зелёный, 3 красный, дальше более спокойные оттенки. Это важно: цвет помогает читать поле быстрее.</div></div>
-              <div class="mini-item"><strong>Кнопки снизу</strong><div class="small-note">Открыть, флаг, дефер, дрон, бомба и Книжечка — чтобы не лазить в лишние меню.</div></div>
-              <div class="mini-item"><strong>Зум</strong><div class="small-note">Ползунок зума увеличивает или уменьшает поле без смены сложности. Это удобно, когда хочешь больше видеть на телефоне.</div></div>
-            </div>
-          `,
-          tips: `
-            <div class="grid-cards">
-              <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-bomb"></use></svg> Для выживания</h3><ul><li>Сначала раскрывай большие пустые зоны.</li><li>Флаги ставь только там, где действительно сомневаешься.</li><li>Дефер не трать впустую: он ценнее, чем кажется.</li></ul></div>
-              <div class="card"><h3><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><use href="#i-wiki"></use></svg> Для хаоса</h3><ul><li>Если поле уже шумит, используй дрон или безопасную бомбу.</li><li>Не спеши с крупными цепочками, если рядом есть лёд или электричество.</li><li>Таймерные мины лучше гасить раньше, пока они ещё не разогнались.</li></ul></div>
-            </div>
-          `,
-        };
-        wikiBody.innerHTML = content[state.wikiTab];
-      }
-
-      function renderTutorial() {
-        const steps = [
-          'Нажми на любую клетку. Первый ход создаёт безопасную зону вокруг старта.',
-          'Флаг ставь на подозрительные клетки. Таймерные мины не видно заранее — они молчат, пока рядом не откроют число.',
-          'Дефер работает только по таймерным минам и не лежит на поле как явная подсказка.',
-          'Огонь, лёд, электричество, телепорты и магниты добавляют хаос прямо по ходу партии.',
-          'Сложность меняет размер поля: от нормального до очень большого.',
-        ];
-        const titles = ['Старт', 'Флаги', 'Дефер', 'Хаос', 'Сложность'];
-        tutorialMeta.textContent = state.firstSeen ? `первая дата входа: ${state.firstSeen}` : 'новый игрок';
-        tutorialText.textContent = steps[state.tutorialStep];
-        tutorialSteps.innerHTML = steps.map((t, i) => `<div class="step-row"><div class="dot ${i === state.tutorialStep ? 'done' : ''}"></div><div><strong>${titles[i]}</strong><div class="small-note">${t}</div></div></div>`).join('');
-        tutorialDiffs.innerHTML = Object.entries(DIFFS).map(([k, d]) => `<button class="mini-btn ${k === state.diff ? 'active' : ''}" data-diff="${k}">${d.label} <span class="small-note">${d.w}×${d.h}</span></button>`).join('');
-        tutorialDiffs.querySelectorAll('[data-diff]').forEach(btn => btn.addEventListener('click', () => { difficultySelect.value = btn.dataset.diff; applyDifficulty(btn.dataset.diff, true); renderTutorial(); }));
-        tutorialBack.textContent = state.tutorialStep === 0 ? 'Пропустить' : 'Назад';
-        tutorialNext.textContent = state.tutorialStep === steps.length - 1 ? 'Старт' : 'Дальше';
-      }
-
-      function showTutorialIfNeeded() {
-        if (!localStorage.getItem(LS_FIRST)) {
-          const date = new Date().toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
-          localStorage.setItem(LS_FIRST, date);
-          state.firstSeen = date;
-        }
-        if (!localStorage.getItem(LS_TUTORIAL)) openTutorial();
-      }
-
-      function openTutorial() { tutorialLayer.classList.add('show'); renderTutorial(); }
-      function closeTutorial() { tutorialLayer.classList.remove('show'); localStorage.setItem(LS_TUTORIAL, '1'); }
-
-      function setTool(tool) { state.selectedTool = tool; toolButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tool === tool)); }
-      function openWiki() { wikiLayer.classList.add('show'); renderWiki(); }
-      function closeWiki() { wikiLayer.classList.remove('show'); }
-
-      function startGame() {
-        clearInterval(state.timer);
-        state.firstClick = false;
-        state.over = false;
-        state.won = false;
-        state.moves = 0;
-        state.time = 0;
-        state.startTs = 0;
-        state.mineTotal = 0;
-        state.inventory = { defer: 0, shield: 1, drone: 0, bomb: 0 };
-        createBoard();
-        updateFace('play');
-        setStatus('готов', '');
-        updateHUD();
-        renderBoard();
-        showHint('Первый клик всегда безопасный.');
-      }
-
-      function useDefer(x, y) {
-        const c = get(x, y);
-        if (state.inventory.defer <= 0) return showHint('Деферов нет.');
-        if (!c || c.revealed) return showHint('Дефер работает только по скрытой клетке.');
-        state.inventory.defer -= 1;
-        if (c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Таймерная мина обезврежена.'); }
-        else showHint('Это не таймерная мина.');
-      }
-      function useDrone(x, y) { if (state.inventory.drone <= 0) return showHint('Дронов нет.'); state.inventory.drone -= 1; shuffle(neighbors(x, y, 2)).slice(0, 6).forEach(([nx, ny]) => { const c = get(nx, ny); if (c && !c.revealed) c.revealed = true; }); showHint('Дрон показал несколько клеток.'); }
-      function useBomb(x, y) { if (state.inventory.bomb <= 0) return showHint('Бомб нет.'); state.inventory.bomb -= 1; [[x, y], ...neighbors(x, y)].forEach(([nx, ny]) => { const c = get(nx, ny); if (!c) return; if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') { c.type = 'empty'; c.countdown = null; c.active = false; } c.revealed = true; }); showHint('Область открыта безопасно.'); }
-
-      function activateTimersAroundOpenNumber(x, y) { const counts = countsMap(); if (counts[y][x] <= 0) return; for (const [nx, ny] of neighbors(x, y)) { const n = get(nx, ny); if (n?.type === 'timer') n.active = true; } }
-      function stepTimers() {
-        for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
-          const c = get(x, y);
-          if (c.freeze > 0) c.freeze -= 1;
-          if (c.type === 'radiation' && c.revealed && c.radiation > 0) c.radiation -= 1;
-          if (c.type === 'timer' && c.active && c.countdown != null) {
-            c.countdown -= 1;
-            if (c.countdown <= 0) {
-              if (state.inventory.shield > 0) { state.inventory.shield -= 1; c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Щит погасил таймерную мину.'); }
-              else { state.over = true; updateFace('lose'); setStatus('взорвались', 'bad'); revealAllMines(); showHint('Таймерная мина сработала.'); }
-              return;
-            }
-          }
-        }
-      }
-
-      function randomEvent() {
-        const type = ['spawn', 'noise', 'shift'][rand(3)];
-        if (type === 'spawn') {
-          const spot = pickRandomCell(c => c.type === 'empty' && !c.revealed && !c.flagged);
-          if (!spot) return;
-          spot.type = ['normal', 'fire', 'ice', 'electric', 'radiation', 'teleport'][rand(6)];
-          if (spot.type === 'radiation') spot.radiation = 5;
-          showHint('Событие: на поле появилась новая мина.');
-        } else if (type === 'noise') {
-          showHint('Событие: цифры стали ненадёжными.');
-        } else {
-          const cells = shuffle([...Array(state.w * state.h)].map((_, i) => [i % state.w, Math.floor(i / state.w)])).slice(0, 8);
-          cells.forEach(([x, y]) => {
-            const c = get(x, y);
-            if (!c || c.revealed || c.type === 'empty') return;
-            const t = pickRandomCell(k => k.type === 'empty' && !k.revealed);
-            if (!t) return;
-            [c.type, t.type] = [t.type, c.type];
-            [c.countdown, t.countdown] = [t.countdown, c.countdown];
-            [c.active, t.active] = [t.active, c.active];
-            [c.pickup, t.pickup] = [t.pickup, c.pickup];
-          });
-          showHint('Подземный поток сместил несколько клеток.');
-        }
-      }
-
-      function worldTick() {
-        const d = DIFFS[state.diff];
-        if (!state.startTs) state.startTs = Date.now();
-        state.time = Math.floor((Date.now() - state.startTs) / 1000);
-        if (state.moves > 0 && state.moves % d.eventEvery === 0 && Math.random() < d.eventChance) randomEvent();
-        stepTimers();
-      }
-
-      function checkWin() { if (!state.over && !state.won && state.board.flat().every(c => c.type !== 'empty' || c.revealed)) { state.won = true; updateFace('win'); setStatus('победа', 'good'); showHint('Поле очищено.'); } }
-
-      function explodeMine(x, y) {
-        if (state.inventory.shield > 0) { state.inventory.shield -= 1; const c = get(x, y); c.type = 'empty'; c.countdown = null; c.active = false; c.revealed = true; showHint('Щит спас от взрыва.'); return; }
-        state.over = true; updateFace('lose'); setStatus('взорвались', 'bad'); revealAllMines(); const c = get(x, y); if (c) c.revealed = true; renderBoard(); showHint('Конец игры.');
-      }
-      function triggerCell(x, y) {
-        const c = get(x, y); if (!c) return;
-        if (c.type === 'normal' || c.type === 'mimic' || c.type === 'timer') return explodeMine(x, y);
-        if (c.type === 'fire') { c.revealed = true; neighbors(x, y).forEach(([nx, ny]) => openCell(nx, ny)); return; }
-        if (c.type === 'ice') { c.revealed = true; neighbors(x, y).forEach(([nx, ny]) => get(nx, ny).freeze = Math.max(get(nx, ny).freeze, 2)); return; }
-        if (c.type === 'electric') { c.revealed = true; shuffle(neighbors(x, y, 2)).slice(0, 5).forEach(([nx, ny]) => openCell(nx, ny)); return; }
-        if (c.type === 'radiation') { c.revealed = true; c.radiation = 5; return; }
-        if (c.type === 'teleport') { c.revealed = true; moveNearbyMines(x, y, 'teleport'); return; }
-        if (c.type === 'magnet') { c.revealed = true; moveNearbyMines(x, y, 'magnet'); }
-      }
-      function moveNearbyMines(x, y, mode) {
-        const source = neighbors(x, y, 1).filter(([nx, ny]) => { const c = get(nx, ny); return c && !c.revealed && c.type !== 'empty'; });
-        const empties = []; for (let yy = 0; yy < state.h; yy++) for (let xx = 0; xx < state.w; xx++) { const c = get(xx, yy); if (!c.revealed && c.type === 'empty') empties.push([xx, yy]); }
-        shuffle(empties);
-        for (const [sx, sy] of source) {
-          if (!empties.length) break;
-          const [dx, dy] = empties.pop();
-          const a = get(sx, sy), b = get(dx, dy);
-          [a.type, b.type] = [b.type, a.type]; [a.countdown, b.countdown] = [b.countdown, a.countdown]; [a.active, b.active] = [b.active, a.active]; [a.pickup, b.pickup] = [b.pickup, a.pickup];
-        }
-        showHint(mode === 'magnet' ? 'Магнит сдвинул ближайшие мины.' : 'Телепорт перемешал соседние клетки.');
-      }
-
-      function handleFlag(x, y) { const c = get(x, y); if (!c || c.revealed) return; c.flagged = !c.flagged; }
-      function openCell(x, y) {
-        const c = get(x, y);
-        if (!c || c.revealed || c.flagged || c.freeze > 0 || state.over || state.won) return;
-        if (!state.firstClick) { state.firstClick = true; placeContents(x, y); }
-        c.revealed = true;
-        if (c.pickup) { state.inventory[c.pickup] += 1; showHint(`Подобрано: ${c.pickup}.`); c.pickup = null; }
-        if (c.type === 'empty') {
-          const counts = countsMap();
-          if (counts[y][x] === 0) {
-            for (const [nx, ny] of neighbors(x, y)) {
-              const n = get(nx, ny);
-              if (n && !n.revealed && !n.flagged && n.type === 'empty') floodReveal(nx, ny);
-            }
-          }
-          activateTimersAroundOpenNumber(x, y);
-        } else triggerCell(x, y);
-      }
-      function floodReveal(x, y) {
-        const stack = [[x, y]];
-        const seen = new Set();
-        const counts = countsMap();
-        while (stack.length) {
-          const [cx, cy] = stack.pop();
-          const kk = key(cx, cy);
-          if (seen.has(kk)) continue;
-          seen.add(kk);
-          const c = get(cx, cy);
-          if (!c || c.revealed || c.flagged || c.freeze > 0) continue;
-          c.revealed = true;
-          if (c.pickup) { state.inventory[c.pickup] += 1; c.pickup = null; }
-          if (c.type === 'empty') {
-            if (counts[cy][cx] === 0) for (const [nx, ny] of neighbors(cx, cy)) { const n = get(nx, ny); if (n && !n.revealed && !n.flagged && n.type === 'empty') stack.push([nx, ny]); }
-            activateTimersAroundOpenNumber(cx, cy);
-          }
-        }
-      }
-      function handleCell(x, y) {
-        const c = get(x, y); if (!c || state.over || state.won) return;
-        if (!state.firstClick) { state.firstClick = true; placeContents(x, y); }
-        if (state.selectedTool === 'flag') handleFlag(x, y);
-        else if (state.selectedTool === 'defer') useDefer(x, y);
-        else if (state.selectedTool === 'drone') useDrone(x, y);
-        else if (state.selectedTool === 'bomb') useBomb(x, y);
-        else openCell(x, y);
-        if (!state.over && !state.won) { state.moves += 1; worldTick(); renderBoard(); checkWin(); }
-      }
-
-      board.addEventListener('click', e => { const cell = e.target.closest('.cell'); if (!cell) return; handleCell(Number(cell.dataset.x), Number(cell.dataset.y)); });
-      board.addEventListener('contextmenu', e => { e.preventDefault(); const cell = e.target.closest('.cell'); if (!cell) return; if (!state.firstClick) { state.firstClick = true; placeContents(Number(cell.dataset.x), Number(cell.dataset.y)); } handleFlag(Number(cell.dataset.x), Number(cell.dataset.y)); if (!state.over && !state.won) { state.moves += 1; worldTick(); renderBoard(); checkWin(); } });
-      resetBtn.addEventListener('click', startGame);
-      toolButtons.forEach(btn => btn.addEventListener('click', () => { if (btn.dataset.tool === 'wiki') return openWiki(); setTool(btn.dataset.tool); }));
-      difficultySelect.addEventListener('change', () => applyDifficulty(difficultySelect.value, true));
-      zoomSlider.addEventListener('input', () => setZoom(Number(zoomSlider.value), true));
-      tutorialBack.addEventListener('click', () => { if (state.tutorialStep === 0) closeTutorial(); else { state.tutorialStep -= 1; renderTutorial(); } });
-      tutorialNext.addEventListener('click', () => { const last = 4; if (state.tutorialStep >= last) closeTutorial(); else { state.tutorialStep += 1; renderTutorial(); } });
-      wikiClose.addEventListener('click', closeWiki);
-      tutorialLayer.addEventListener('click', e => { if (e.target === tutorialLayer) closeTutorial(); });
-      wikiLayer.addEventListener('click', e => { if (e.target === wikiLayer) closeWiki(); });
-      window.addEventListener('resize', () => applyDifficulty(state.diff, false));
-      window.addEventListener('keydown', e => { if (e.key === 'Escape') { closeTutorial(); closeWiki(); } if (e.key === '1') setTool('open'); if (e.key === '2') setTool('flag'); if (e.key === '3') setTool('defer'); if (e.key === '4') setTool('drone'); if (e.key === '5') setTool('bomb'); });
-
-      function init() {
-        if (!state.firstSeen) {
-          const date = new Date().toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
-          localStorage.setItem(LS_FIRST, date);
-          state.firstSeen = date;
-        }
-        setZoom(state.zoom * 100, false);
-        zoomSlider.value = String(Math.round(state.zoom * 100));
-        applyDifficulty(state.diff, true);
-        startGame();
-        setTool('open');
-        updateHUD();
-        renderBoard();
-        showTutorialIfNeeded();
-        showHint('Нажми на любую клетку, чтобы начать.');
-      }
-
-      init();
-    })();
-  </script></body>
-                                                                                                                                         </html>
+(function init(){
+  fillWiki();
+  const today=new Date().toDateString();
+  if(localStorage.getItem('ms_tutorial_date')!==today){
+    localStorage.setItem('ms_tutorial_date',today);
+    startTutorial();
+  } else {
+    showDifficultyModal();
+  }
+})();
+</script>
+</body>
+</html>
